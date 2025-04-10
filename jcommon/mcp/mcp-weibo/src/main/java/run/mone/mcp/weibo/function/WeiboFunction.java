@@ -21,7 +21,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
     private static final String CLIENT_ID = "1500473794";
-    private static final String CLIENT_SECRET = "e9c878c2f5a37808661effcb5107fb55";
+    private static final String CLIENT_SECRET = "111111";
     private static final String AUTHORIZATION_URL = "https://api.weibo.com/oauth2/authorize";
     private static final String TOKEN_URL = "https://api.weibo.com/oauth2/access_token";
     public static final String REDIRECT_URI = "https://api.weibo.com/oauth2/default.html";
