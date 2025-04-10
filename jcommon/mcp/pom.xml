@@ -58,6 +58,7 @@
         <module>mcp-store-data</module>
         <module>mcp-knowledge-base</module>
         <module>mcp-chat</module>
+        <module>mcp-x_twitter</module>
     </modules>
 
     <properties>
@@ -194,6 +195,14 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
             <version>3.4.1</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>17.0.2</version> <!-- 根据你的JDK版本选择 -->
+            <classifier>mac</classifier> <!-- 平台标识：win/linux/mac -->
+        </dependency>
+
     </dependencies>
 
 </project>

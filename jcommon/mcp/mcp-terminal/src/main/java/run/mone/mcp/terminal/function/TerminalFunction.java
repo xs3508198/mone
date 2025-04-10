@@ -11,12 +11,26 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.function.Function;
 
+/**
+ * Terminal功能实现类
+ * 提供终端操作相关功能，包括：
+ * 1. 打开终端
+ * 2. 执行命令
+ * 3. 模拟按键
+ * 4. 关闭终端
+ * 基于MacOS的Terminal.app实现，使用tmux进行会话管理
+ */
 @Data
 @Slf4j
 public class TerminalFunction implements Function<Map<String, Object>, McpSchema.CallToolResult> {
 
+    /** 功能名称 */
     private String name = "terminalOperation";
+    
+    /** 功能描述 */
     private String desc = "Terminal operations include opening the terminal, running commands, closing the terminal, and simulating key operations";
+    
+    /** 工具方案JSON定义，描述了支持的操作类型和参数 */
     private String toolScheme = """
         {
             "type": "object",
@@ -84,7 +98,28 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         }
         """;
 
+    /** 临时文件路径前缀 */
+    private static final String FILE_PREFIX = "/terminal_output_";
+    
+    /** tmux会话前缀 */
+    private static final String SESSION_PREFIX =  "session_";
+    
+    /** 临时文件存储路径 */
+    private final String TEMPORARY_FILE_PATH;
 
+    /**
+     * 构造函数
+     * 初始化临时文件存储路径，默认为/tmp
+     */
+    public TerminalFunction(){
+        TEMPORARY_FILE_PATH = System.getenv().getOrDefault("TEMPORARY_FILE_PATH", "/tmp");
+    }
+
+    /**
+     * 处理终端操作请求
+     * @param arguments 操作参数
+     * @return 操作结果
+     */
     @Override
     public McpSchema.CallToolResult apply(Map<String, Object> arguments) {
         String operation = (String)arguments.get("operation");
@@ -103,16 +138,13 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         }
     }
 
-    private static final String FILE_PREFIX = "/terminal_output_";
-    private static final String SESSION_PREFIX =  "session_";
-    private final String TEMPORARY_FILE_PATH;
-
-    public TerminalFunction(){
-        TEMPORARY_FILE_PATH = System.getenv().getOrDefault("TEMPORARY_FILE_PATH", "/tmp");
-    }
-
+    /**
+     * 打开新的终端窗口
+     * @return 终端窗口ID
+     */
     public String openTerminal() {
         try {
+            // 使用AppleScript打开新的Terminal窗口
             String appleScript =
                     "tell application \"Terminal\"\n" +
                             "activate\n" +
@@ -138,9 +170,7 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
             String tmuxScript =
                     String.format("tell application \"Terminal\"\n" +
                             "    do script \"tmux new-session -d -s " + sessionName + " '/bin/zsh' \" in window id %s \n" +
-                            //"    delay 2\n" +
                             "    do script \"tmux pipe-pane -o -t " + sessionName + " 'cat > " +outputFilePath + " '\" in window id %s \n" +
-                            //"    delay 2\n" +
                             "    do script \"tmux attach -t " + sessionName + " \" in window id %s \n" +
                             "end tell", terminalWindowId, terminalWindowId,terminalWindowId);
             Process tmuxProcess = new ProcessBuilder("osascript", "-e", tmuxScript)
@@ -155,6 +185,12 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         return null;
     }
 
+    /**
+     * 在指定终端窗口执行命令
+     * @param command 要执行的命令
+     * @param windowId 终端窗口ID
+     * @return 命令执行结果
+     */
     public String executeCommand(String command, String windowId){
         if (windowId == null || windowId.isEmpty()) {
             return "终端未开启，请打开终端！";
@@ -181,12 +217,17 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         return res;
     }
 
+    /**
+     * 读取并过滤终端输出
+     * @param outputFilePath 输出文件路径
+     * @return 过滤后的输出内容
+     */
     public String readAndFilterOutput(String outputFilePath) {
         StringBuilder filteredOutput = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(outputFilePath), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                // Filter out ANSI escape codes and other unnecessary content
+                // 过滤ANSI转义码和其他不必要的内容
                 line = line.replaceAll("\\u001B\\[[;\\d]*[a-zA-Z]", "");
                 line = line.replaceAll("\u0000", "");
                 if (!line.trim().isEmpty()) {
@@ -199,6 +240,11 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         return filteredOutput.toString();
     }
 
+    /**
+     * 关闭指定的终端窗口
+     * @param windowId 终端窗口ID
+     * @return 关闭结果
+     */
     public String closeTerminal(String windowId){
         try {
             String sessionName = SESSION_PREFIX + windowId;
@@ -217,7 +263,6 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
                 return "关闭终端失败，请重试：" + exitCode;
             }
             // 删除对应的临时文件
-
             String outputFilePath = TEMPORARY_FILE_PATH + FILE_PREFIX + windowId + ".log";
             Files.deleteIfExists(Paths.get(outputFilePath));
         } catch (IOException | InterruptedException e) {
@@ -226,6 +271,12 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         return "终端窗口" + windowId + "成功关闭！";
     }
 
+    /**
+     * 模拟按键操作
+     * @param windowId 终端窗口ID
+     * @param keys 要模拟的按键序列
+     * @return 操作结果
+     */
     public String simulationKeyPresses(String windowId, String... keys){
         if (windowId == null || windowId.isEmpty()) {
             return "无此终端窗口";
@@ -254,6 +305,4 @@ public class TerminalFunction implements Function<Map<String, Object>, McpSchema
         }
         return res;
     }
-
-
 }
