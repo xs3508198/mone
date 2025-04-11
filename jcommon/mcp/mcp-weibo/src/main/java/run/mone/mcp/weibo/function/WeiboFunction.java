@@ -5,14 +5,18 @@ import com.google.gson.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 import run.mone.hive.mcp.spec.McpSchema;
 import run.mone.mcp.weibo.http.HttpClientUtil;
+import run.mone.mcp.weibo.model.WeiboContent;
 
 import java.awt.*;
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.function.Function;
+
+import static run.mone.hive.common.JsonUtils.gson;
 
 @Slf4j
 public class WeiboFunction implements Function<Map<String, Object>, McpSchema.CallToolResult> {
@@ -22,21 +26,21 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return null;
     }
 
-    private static final Gson gson = new Gson();
 
-    private static String ACCESS_KEY = "" ;
+    private static String ACCESS_KEY = "2.009t_itFOmpXdB7ef68576b70JvGR_" ;
 
     private static final String CLIENT_ID = "1500473794";
-    private static final String CLIENT_SECRET = "";
+    private static final String CLIENT_SECRET = "e9c878c2f5a37808661effcb5107fb55";
     private static final String AUTHORIZATION_URL = "https://api.weibo.com/oauth2/authorize";
     private static final String TOKEN_URL = "https://api.weibo.com/oauth2/access_token";
     public static final String REDIRECT_URI = "https://api.weibo.com/oauth2/default.html";
 
     private static final String HOME_TIMELINE = "https://api.weibo.com/2/statuses/home_timeline.json";
-
+    private static final String USER_TIMELINE = "https://api.weibo.com/1/statuses/user_timeline.json";
+    private static final String FRIENDS_TIMELINE = "https://api.weibo.com/2/statuses/friends_timeline.json";
 
     public String loginAuthorization() {
-        String finalUrl = AUTHORIZATION_URL + "?client_id=" + CLIENT_ID + "&response_type=code&redirect_uri=" + REDIRECT_URI;
+        String finalUrl = AUTHORIZATION_URL + "?client_id=" + CLIENT_ID + "&response_type=code&redirect_uri=" + REDIRECT_URI + "&scope=all";
         if (Desktop.isDesktopSupported()) {
             Desktop desktop = Desktop.getDesktop();
             if (desktop.isSupported(Desktop.Action.BROWSE)) {
@@ -72,7 +76,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return "登录失败，请核验参数重新登录！";
     }
 
-    public String homeTimeline(String page) throws IOException {
+    public WeiboContent homeTimeline(String page) throws IOException {
         if (page == null || page.isEmpty()) {
             page = "1";
         }
@@ -80,10 +84,27 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         params.put("access_token", ACCESS_KEY);
         params.put("page", page);
         String res = HttpClientUtil.get(HOME_TIMELINE, params);
-        return res;
+        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
+        return weiboContent;
     }
 
 
+    public WeiboContent userTimeline() throws IOException {
+        Map<String, String> params = new HashMap<>();
+        params.put("access_token", ACCESS_KEY);
+        String res = HttpClientUtil.get(USER_TIMELINE, params);
+        System.out.println(res);
+        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
+        return weiboContent;
+    }
+
+    public WeiboContent firendsTimeline() throws IOException {
+        Map<String, String> params = new HashMap<>();
+        params.put("access_token", ACCESS_KEY);
+        String res = HttpClientUtil.get(FRIENDS_TIMELINE, params);
+        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
+        return weiboContent;
+    }
 
 
 }
