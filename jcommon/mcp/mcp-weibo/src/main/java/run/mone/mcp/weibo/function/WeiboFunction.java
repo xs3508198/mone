@@ -24,7 +24,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     private static final Gson gson = new Gson();
 
-    private static String ACCESS_KEY = "2.009t_itFOmpXdB7ef68576b70JvGR_" ;
+    private static String ACCESS_KEY = "" ;
 
     private static final String CLIENT_ID = "1500473794";
     private static final String CLIENT_SECRET = "";
