@@ -77,7 +77,8 @@ public class HttpClientUtil {
     private static String executeRequest(Request request) throws IOException {
         try (Response response = CLIENT.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                throw new IOException("请求失败，状态码: " + response.code() + " 消息: " + response.message());
+                log.info("请求失败，状态码: {}，消息: {}", response.code(), response.message());
+                return "";
             }
             ResponseBody body = response.body();
             return body != null ? body.string() : null;
