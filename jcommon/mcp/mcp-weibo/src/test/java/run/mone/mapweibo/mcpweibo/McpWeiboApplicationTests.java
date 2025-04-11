@@ -19,7 +19,7 @@ public class McpWeiboApplicationTests {
     @Test
     @SneakyThrows
     public void test2() {
-        String token = "3563a6bbd49cf35cbf0a8ab2b85e7077";
+        String token = "";
         WeiboFunction weiboFunction = new WeiboFunction();
         String res = weiboFunction.loginGetAccessToken(token);
         System.out.println(res);
