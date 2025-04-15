@@ -19,7 +19,7 @@ public class McpWeiboApplicationTests {
     @Test
     @SneakyThrows
     public void test2() {
-        String token = "";
+        String token = "f5f0f8d3819a60dadbc94bfd909a7f2c";
         WeiboFunction weiboFunction = new WeiboFunction();
         String res = weiboFunction.loginGetAccessToken(token);
         System.out.println(res);
@@ -46,9 +46,15 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test5(){
         WeiboFunction weiboFunction = new WeiboFunction();
-        WeiboContent res = weiboFunction.firendsTimeline();
-        System.out.println(gson.toJson(res));
+        String res = weiboFunction.weiboHot();
+        System.out.println(res);
     }
-
+    @Test
+    @SneakyThrows
+    public void test6(){
+        WeiboFunction weiboFunction = new WeiboFunction();
+        String res = weiboFunction.searchWeibo("关税");
+        System.out.println(res);
+    }
 
 }
