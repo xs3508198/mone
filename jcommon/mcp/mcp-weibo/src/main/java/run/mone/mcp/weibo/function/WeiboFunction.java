@@ -33,13 +33,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    private static String ACCESS_KEY = "2.009t_itFOmpXdB7ef68576b70JvGR_" ;
-    private static final String ALAPI_TOKEN  = "kz9rbidzldo4ukzxwbexrgguzndqh4";
+    private static String ACCESS_KEY = "" ;
+    private static final String ALAPI_TOKEN  = "";
 
 
 
     private static final String CLIENT_ID = "1500473794";
-    private static final String CLIENT_SECRET = "1e8d2ba34025a53aa78ca9b9286419cf";
+    private static final String CLIENT_SECRET = "";
     private static final String AUTHORIZATION_URL = "https://api.weibo.com/oauth2/authorize";
     private static final String TOKEN_URL = "https://api.weibo.com/oauth2/access_token";
     public static final String REDIRECT_URI = "https://api.weibo.com/oauth2/default.html";
