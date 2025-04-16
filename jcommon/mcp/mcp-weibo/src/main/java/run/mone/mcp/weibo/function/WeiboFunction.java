@@ -5,6 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Cookie;
 import org.openqa.selenium.WebDriver;
@@ -16,6 +20,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import run.mone.hive.mcp.spec.McpSchema;
 import run.mone.mcp.weibo.http.HttpClientUtil;
 import run.mone.mcp.weibo.model.WeiboContent;
+import run.mone.mcp.weibo.model.WeiboContentDisplay;
 
 import java.awt.*;
 import java.io.IOException;
@@ -23,9 +28,8 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 import static run.mone.hive.common.JsonUtils.gson;
@@ -102,7 +106,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return "登录失败，请核验参数重新登录！";
     }
 
-    public WeiboContent homeTimeline(String page) throws IOException {
+    public List<WeiboContentDisplay> homeTimeline(String page) throws IOException {
         if (page == null || page.isEmpty()) {
             page = "1";
         }
@@ -111,7 +115,8 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         params.put("page", page);
         String res = HttpClientUtil.get(HOME_TIMELINE, params);
         WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
-        return weiboContent;
+        List<WeiboContentDisplay> contentDisplay = weiboContent.toContentDisplay();
+        return contentDisplay;
     }
 
 
@@ -133,38 +138,29 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     public String searchWeibo(String keyword) throws IOException {
 
-        ChromeOptions options = new ChromeOptions();
-//        options.addArguments("--headless");
-
-        WebDriver driver = new ChromeDriver(options);
+        WebDriver driver = createWebDriver();
 
         try {
             String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
             String searchUrl = "https://s.weibo.com/weibo?q=" + encodedKeyword;
             driver.get(searchUrl);
+            Document doc = Jsoup.parse(Objects.requireNonNull(driver.getPageSource()));
+            Elements elements = doc.select("div.card-wrap");
 
-            System.out.println(driver.getPageSource());
-
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-
-            wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("div.card-wrap")));
-
-            List<WebElement> elements = driver.findElements(By.cssSelector("div.card-wrap"));
             JSONArray results = new JSONArray();
 
-            for (WebElement post : elements) {
+            for (Element post : elements) {
                 try {
-                    String username = post.findElement(By.cssSelector("a.name")).getText();
-                    String content = post.findElement(By.cssSelector("p.txt")).getText();
-                    String time = "未知";
-                    try {
-                        WebElement timeElement = post.findElement(By.cssSelector("p.from a"));
-                        if (timeElement != null) {
-                            time = timeElement.getText();
-                        }
-                    } catch (Exception ex) {
-                        log.warn("未找到发布时间，message：{}", ex.getMessage());
-                        // 如果没有找到发布时间则保持 "未知"
+                    String username = post.select("a.name").text();
+                    String time = post.select("div.from a").text();
+                    if (time.isEmpty()){
+                        time = "未知";
+                    }
+
+                    Element contentElement = post.select("p.txt").first();
+                    String content = "";
+                    if (contentElement != null) {
+                        content = contentElement.ownText().trim();
                     }
                     if (!username.isEmpty() && !content.isEmpty()) {
                         JSONObject postJson = new JSONObject();
@@ -173,7 +169,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                         postJson.put("time", time);
                         results.put(postJson);
                     }
-                } catch (JSONException e) {
+                } catch (Exception e) {
                     log.error("解析单条微博失败: {}", e.getMessage());
                 }
             }
@@ -189,17 +185,18 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
     }
 
-    public static WebDriver createWebDriver(){
+    public static WebDriver createWebDriver() {
         if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
             System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
         }
         ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless");
         WebDriver driver = new ChromeDriver(options);
 
         try {
             // 1. 访问微博主页以初始化会话
-            driver.get("https://weibo.com/");
-            Thread.sleep(3000); // 等待页面加载
+            driver.get("https://s.weibo.com/");
+            Thread.sleep(1000); // 等待页面加载
 
             // 2. 清除现有的 Cookie
             driver.manage().deleteAllCookies();
@@ -212,8 +209,8 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             driver.manage().addCookie(new Cookie("SCF", ""));
 
             // 4. 重新访问微博主页以应用 Cookie
-            driver.get("https://weibo.com/");
-            Thread.sleep(3000); // 等待页面加载
+            driver.get("https://s.weibo.com/");
+            Thread.sleep(1000); // 等待页面加载
 
             return driver;
         } catch (InterruptedException e) {

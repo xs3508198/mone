@@ -4,6 +4,9 @@ import lombok.SneakyThrows;
 import org.junit.Test;
 import run.mone.mcp.weibo.function.WeiboFunction;
 import run.mone.mcp.weibo.model.WeiboContent;
+import run.mone.mcp.weibo.model.WeiboContentDisplay;
+
+import java.util.List;
 
 import static run.mone.hive.common.JsonUtils.gson;
 
@@ -29,7 +32,7 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test3(){
         WeiboFunction weiboFunction = new WeiboFunction();
-        WeiboContent weiboContent = weiboFunction.homeTimeline("1");
+        List<WeiboContentDisplay> weiboContent = weiboFunction.homeTimeline("1");
         System.out.println(gson.toJson(weiboContent));
     }
 
