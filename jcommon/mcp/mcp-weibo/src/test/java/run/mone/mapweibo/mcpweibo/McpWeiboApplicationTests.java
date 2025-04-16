@@ -7,6 +7,8 @@ import run.mone.mcp.weibo.model.WeiboContent;
 import run.mone.mcp.weibo.model.WeiboContentDisplay;
 
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static run.mone.hive.common.JsonUtils.gson;
 
@@ -56,8 +58,28 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test6(){
         WeiboFunction weiboFunction = new WeiboFunction();
-        String res = weiboFunction.searchWeibo("关税");
-        System.out.println(res);
+        List<WeiboContentDisplay> res = weiboFunction.searchWeibo("曾凡博");
+        System.out.println(gson.toJson(res));
     }
+
+    @Test
+    @SneakyThrows
+    public void test7(){
+        System.out.println(ExtractUserId("//weibo.com/6616523296?refer_flag=1001030103_"));
+    }
+
+
+    private String ExtractUserId(String userText) {
+        // 正则表达式匹配 weibo.com/后面的连续数字
+        Pattern pattern = Pattern.compile("weibo\\.com/(\\d+)");
+        Matcher matcher = pattern.matcher(userText);
+        if (matcher.find()) {
+            String userId = matcher.group(1);
+            return userId;
+        } else {
+            return "";
+        }
+    }
+
 
 }

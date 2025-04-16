@@ -21,6 +21,7 @@ import run.mone.hive.mcp.spec.McpSchema;
 import run.mone.mcp.weibo.http.HttpClientUtil;
 import run.mone.mcp.weibo.model.WeiboContent;
 import run.mone.mcp.weibo.model.WeiboContentDisplay;
+import run.mone.mcp.weibo.model.WeiboUserDisplay;
 
 import java.awt.*;
 import java.io.IOException;
@@ -31,6 +32,8 @@ import java.time.Duration;
 import java.util.*;
 import java.util.List;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static run.mone.hive.common.JsonUtils.gson;
 
@@ -136,54 +139,6 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return res;
     }
 
-    public String searchWeibo(String keyword) throws IOException {
-
-        WebDriver driver = createWebDriver();
-
-        try {
-            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            String searchUrl = "https://s.weibo.com/weibo?q=" + encodedKeyword;
-            driver.get(searchUrl);
-            Document doc = Jsoup.parse(Objects.requireNonNull(driver.getPageSource()));
-            Elements elements = doc.select("div.card-wrap");
-
-            JSONArray results = new JSONArray();
-
-            for (Element post : elements) {
-                try {
-                    String username = post.select("a.name").text();
-                    String time = post.select("div.from a").text();
-                    if (time.isEmpty()){
-                        time = "未知";
-                    }
-
-                    Element contentElement = post.select("p.txt").first();
-                    String content = "";
-                    if (contentElement != null) {
-                        content = contentElement.ownText().trim();
-                    }
-                    if (!username.isEmpty() && !content.isEmpty()) {
-                        JSONObject postJson = new JSONObject();
-                        postJson.put("username", username);
-                        postJson.put("content", content);
-                        postJson.put("time", time);
-                        results.put(postJson);
-                    }
-                } catch (Exception e) {
-                    log.error("解析单条微博失败: {}", e.getMessage());
-                }
-            }
-
-            if (results.length() > 0) {
-                log.info("搜索结果（JSON 格式）：");
-                return results.toString(2);
-            } else {
-                return "未找到有效搜索结果";
-            }
-        } finally {
-            driver.quit();
-        }
-    }
 
     public static WebDriver createWebDriver() {
         if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
@@ -222,5 +177,175 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             throw new RuntimeException("初始化 WebDriver 失败", e);
         }
     }
+
+    public List<WeiboContentDisplay> searchWeibo(String keyword){
+
+        WebDriver driver = createWebDriver();
+
+        try {
+            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
+            String searchUrl = "https://s.weibo.com/weibo?q=" + encodedKeyword;
+            driver.get(searchUrl);
+            Document doc = Jsoup.parse(Objects.requireNonNull(driver.getPageSource()));
+            Elements elements = doc.select("div.card-wrap");
+
+            List<WeiboContentDisplay> res = new ArrayList<>();
+            for (Element post : elements) {
+                try {
+                    WeiboContentDisplay display = new WeiboContentDisplay();
+                    String mid = post.attr("mid");
+                    display.setWeiboId(mid);
+                    Element userElement = post.select("a.name").first();
+                    if (userElement != null) {
+                        String userUrl = userElement.attr("href");
+                        String userId = extractUserId(userUrl);
+                        String username = userElement.text();
+                        display.setUserId(userId);
+                        display.setUsername(username);
+                    }
+
+                    Element timeElement = post.select("div.from a").first();
+                    String time = timeElement != null ? timeElement.text().trim() : "未知时间";
+                    display.setTime(time);
+
+                    Elements contentElements = post.select("p.txt");
+                    String content = "";
+                    if (contentElements.size() > 1) {
+                        for (Element contentElement : contentElements) {
+                            if (contentElement.attr("node-type").equals("feed_list_content_full")){
+                                //地点包含在内容里，单独提取
+                                content = extractCleanContent(contentElement, display);
+                            }
+                        }
+                    } else if (contentElements.size() == 1) {
+                        Element firstContentElement = contentElements.first();
+                        content = extractCleanContent(firstContentElement, display);
+                    }
+                    display.setContent(content);
+
+                    Elements actionItems = post.select("div.card-act li");
+                    for (Element li : actionItems) {
+                        String actionType = li.select("a").attr("action-type");
+                        if (actionType.contains("feed_list_forward")){
+                            //转发
+                            String repostCnt = li.text().trim();
+                            if (repostCnt.equals("转发")) {
+                                repostCnt = "0";
+                            }
+                            display.setRepost(repostCnt);
+                        }
+                        if (actionType.contains("feed_list_comment")){
+                            //评论
+                            String commentCnt = li.text().trim();
+                            if (commentCnt.equals("评论")) {
+                                commentCnt = "0";
+                            }
+                            display.setComment(commentCnt);
+                        }
+                        if (actionType.contains("feed_list_like")){
+                            //点赞
+                            Element likeElement = li.select("span.woo-like-count").first();
+                            String likeCnt = (likeElement != null) ? likeElement.text().trim() : "";
+                            if (likeCnt.equals("赞")) {
+                                likeCnt = "0";
+                            }
+                            display.setLike(likeCnt);
+                        }
+                    }
+                    res.add(display);
+                } catch (Exception e) {
+                    log.error("解析单条微博失败: {}", e.getMessage());
+                }
+            }
+
+            if (res.size() > 0) {
+                log.info("搜索结果（JSON 格式）：");
+                return res;
+            } else {
+                return new ArrayList<>();
+            }
+        } finally {
+            driver.quit();
+        }
+    }
+
+
+    public List<WeiboUserDisplay> searchUsers(String userKeyword){
+        WebDriver driver = createWebDriver();
+        try {
+            List<WeiboUserDisplay> res = new ArrayList<>();
+            String encodedKeyword = URLEncoder.encode(userKeyword, StandardCharsets.UTF_8);
+            String searchUrl = "https://s.weibo.com/weibo?q=" + encodedKeyword + "&Refer=weibo_user";
+            driver.get(searchUrl);
+            Document doc = Jsoup.parse(Objects.requireNonNull(driver.getPageSource()));
+            Element element = doc.select("div.card-wrap").first();
+            if (element == null) {
+                return new ArrayList<>();
+            }
+            Elements userElements = element.select("div.card card-user-b s-brt1 card-user-b-padding");
+            for (Element userElement : userElements) {
+                WeiboUserDisplay display = new WeiboUserDisplay();
+                Element info = userElement.select("div.info").first();
+                Element nameElement = info.select("a.name").first();
+                String nameHref = nameElement.attr("href").trim();
+                String regex = "//weibo\\.com/u/(\\d+)";
+                Pattern pattern = Pattern.compile(regex);
+                Matcher matcher = pattern.matcher(nameHref);
+                if (matcher.find()) {
+                    String userId = matcher.group(1);
+                    display.setUserId(userId);
+                }
+                String username = nameElement.text().trim();
+                display.setUsername(username);
+                Element intro = info.select("p").first();
+                if (intro != null) {
+                    String introduction = intro.text().trim();
+                    display.setIntroduction(introduction);
+                }
+
+                //TODO 
+
+            res.add(display);
+
+            }
+
+            return res;
+        } finally {
+            driver.quit();
+        }
+    }
+
+
+    private String extractUserId(String userText) {
+        // 正则表达式匹配 weibo.com/后面的连续数字
+        Pattern pattern = Pattern.compile("weibo\\.com/(\\d+)");
+        Matcher matcher = pattern.matcher(userText);
+        if (matcher.find()) {
+            String userId = matcher.group(1);
+            return userId;
+        } else {
+            return "";
+        }
+    }
+
+    private String extractCleanContent(Element element, WeiboContentDisplay display) {
+        String html = element.html().replaceAll("(?i)<br[^>]*>", "\n");
+        Document doc = Jsoup.parse(html);
+        for (Element a : doc.select("a")) {
+            if (!"_blank".equalsIgnoreCase(a.attr("target"))){
+                a.remove();
+            }
+            String wbicon = a.select("i.wbicon").text().trim();
+            if ("_blank".equalsIgnoreCase(a.attr("target")) && wbicon.equals("2")){
+                display.setPlace(a.text().replaceFirst("2", ""));
+                a.remove();
+            }
+        }
+        doc.select("i.wbicon, svg, use").remove();
+        return doc.body().wholeText().trim();
+    }
+
+
+
 
 }

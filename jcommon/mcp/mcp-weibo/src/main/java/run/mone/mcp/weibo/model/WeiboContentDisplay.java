@@ -18,6 +18,8 @@ public class WeiboContentDisplay {
 
     private String comment;
 
+    private String place;
+
     private String repost;
 
     private String like;
