@@ -30,8 +30,9 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test5(){
         WeiboFunction weiboFunction = new WeiboFunction();
-        String res = weiboFunction.weiboHot();
-        System.out.println(res);
+        weiboFunction.createWebDriver();
+        Map<String, String> res = weiboFunction.weiboHot();
+        System.out.println(gson.toJson(res));
     }
 
     @Test
@@ -175,6 +176,15 @@ public class McpWeiboApplicationTests {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
         List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.myFollowWeibo(2);
+        System.out.println(gson.toJson(weiboContentDisplays));
+    }
+
+    @Test
+    @SneakyThrows
+    public void test10(){
+        WeiboFunction weiboFunction = new WeiboFunction();
+        weiboFunction.createWebDriver();
+        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.recommendWeibo(2);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
