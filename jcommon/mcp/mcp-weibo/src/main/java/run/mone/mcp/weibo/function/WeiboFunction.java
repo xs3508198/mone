@@ -11,10 +11,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.openqa.selenium.By;
-import org.openqa.selenium.Cookie;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -47,8 +44,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return null;
     }
 
-    @Getter
-    private Map<String, String> cookies = new HashMap<>();
+    private WebDriver driver;
 
     private static String ACCESS_KEY = "2.";
     private static final String ALAPI_TOKEN = "";
@@ -66,6 +62,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     private static final String SEARCH_WEIBO = "https://s.weibo.com/weibo?q=";
     private static final String SEARCH_USER = "https://s.weibo.com/user?q=";
+    private static final String MY_FOLLOW_WEIBO = "https://weibo.com/";
 
     private static final String CHROME_DRIVER_PATH = "/Users/a1/chromedriver/chromedriver-mac-arm64/chromedriver";
 
@@ -75,65 +72,149 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    public String loginAuthorization() {
-        String finalUrl = AUTHORIZATION_URL + "?client_id=" + CLIENT_ID + "&response_type=code&redirect_uri=" + REDIRECT_URI + "&scope=all";
-        if (Desktop.isDesktopSupported()) {
-            Desktop desktop = Desktop.getDesktop();
-            if (desktop.isSupported(Desktop.Action.BROWSE)) {
-                try {
-                    desktop.browse(new URI(finalUrl));
-                    return "授权成功后请输入code：";
-                } catch (Exception e) {
-                    log.error(e.getMessage());
-                }
+//    public String loginAuthorization() {
+//        String finalUrl = AUTHORIZATION_URL + "?client_id=" + CLIENT_ID + "&response_type=code&redirect_uri=" + REDIRECT_URI + "&scope=all";
+//        if (Desktop.isDesktopSupported()) {
+//            Desktop desktop = Desktop.getDesktop();
+//            if (desktop.isSupported(Desktop.Action.BROWSE)) {
+//                try {
+//                    desktop.browse(new URI(finalUrl));
+//                    return "授权成功后请输入code：";
+//                } catch (Exception e) {
+//                    log.error(e.getMessage());
+//                }
+//            }
+//        }
+//        return "授权出现问题，请重试！";
+//    }
+
+
+//    public String loginGetAccessToken(String code) throws IOException {
+//        Map<String, String> params = new HashMap<>();
+//        params.put("client_id", CLIENT_ID);
+//        params.put("client_secret", CLIENT_SECRET);
+//        params.put("grant_type", "authorization_code");
+//        params.put("code", code);
+//        params.put("redirect_uri", REDIRECT_URI);
+//        String res = HttpClientUtil.postForm(TOKEN_URL, params);
+//        if (res == null || res.isEmpty()) {
+//            return "登录失败，请核验参数重新登录！";
+//        }
+//        JsonObject jsonObject = gson.fromJson(res, JsonObject.class);
+//        String accessKey = jsonObject.get("access_token").getAsString();
+//        if (accessKey != null && accessKey.isEmpty()) {
+//            ACCESS_KEY = accessKey;
+//            return "登录成功！";
+//        }
+//        return "登录失败，请核验参数重新登录！";
+//    }
+//
+//    public List<WeiboContentDisplay> homeTimeline(String page) throws IOException {
+//        if (page == null || page.isEmpty()) {
+//            page = "1";
+//        }
+//        Map<String, String> params = new HashMap<>();
+//        params.put("access_token", ACCESS_KEY);
+//        params.put("page", page);
+//        String res = HttpClientUtil.get(HOME_TIMELINE, params);
+//        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
+//        List<WeiboContentDisplay> contentDisplay = weiboContent.toContentDisplay();
+//        return contentDisplay;
+//    }
+//
+//
+//    public WeiboContent userTimeline() throws IOException {
+//        Map<String, String> params = new HashMap<>();
+//        params.put("access_token", ACCESS_KEY);
+//        String res = HttpClientUtil.get(USER_TIMELINE, params);
+//        System.out.println(res);
+//        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
+//        return weiboContent;
+//    }
+
+
+    public List<WeiboContentDisplay> myFollowWeibo(int scrollTimes) throws InterruptedException {
+        List<WeiboContentDisplay> res = new ArrayList<>();
+        if (driver == null) {
+            log.error("未登录，请您登录！");
+            return res;
+        }
+        driver.get(MY_FOLLOW_WEIBO);
+        Thread.sleep(1500);
+
+        List<String> htmlList = new ArrayList<>();
+        List<WebElement> cards = driver.findElements(By.cssSelector("div.vue-recycle-scroller__item-view"));
+        for (WebElement card : cards) {
+            List<WebElement> expands = card.findElements(By.cssSelector("span.expand"));
+            if (!expands.isEmpty()) {
+                expands.get(0).click();
+                Thread.sleep(300);
             }
         }
-        return "授权出现问题，请重试！";
-    }
+        String initHtml = driver.getPageSource();
+        htmlList.add(initHtml);
+        for (int i = 0; i < scrollTimes; i++) {
+            ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
+            Thread.sleep(1000);
+            List<WebElement> cards2 = driver.findElements(By.cssSelector("div.vue-recycle-scroller__item-view"));
+            for (WebElement card : cards2) {
+                List<WebElement> expands = card.findElements(By.cssSelector("span.expand"));
+                if (!expands.isEmpty()) {
+                    expands.get(0).click();
+                    Thread.sleep(300);
+                }
+            }
+            String scrollHtml = driver.getPageSource();
+            htmlList.add(scrollHtml);
 
-
-    public String loginGetAccessToken(String code) throws IOException {
-        Map<String, String> params = new HashMap<>();
-        params.put("client_id", CLIENT_ID);
-        params.put("client_secret", CLIENT_SECRET);
-        params.put("grant_type", "authorization_code");
-        params.put("code", code);
-        params.put("redirect_uri", REDIRECT_URI);
-        String res = HttpClientUtil.postForm(TOKEN_URL, params);
-        if (res == null || res.isEmpty()) {
-            return "登录失败，请核验参数重新登录！";
         }
-        JsonObject jsonObject = gson.fromJson(res, JsonObject.class);
-        String accessKey = jsonObject.get("access_token").getAsString();
-        if (accessKey != null && accessKey.isEmpty()) {
-            ACCESS_KEY = accessKey;
-            return "登录成功！";
+        Set<String> seenWeiboUrlSet = new HashSet<>();
+        for (String html : htmlList) {
+            Document doc = Jsoup.parse(html);
+            Elements elements = doc.select("div.vue-recycle-scroller__item-view");
+            for (Element element : elements) {
+                WeiboContentDisplay display = new WeiboContentDisplay();
+                Element userElement = element.select("a.head_name_24eEB").first();
+                String userId = userElement.attr("usercard").trim();
+                String username = userElement.text().trim();
+                display.setUserId(userId);
+                display.setUsername(username);
+                Element timeElement = element.select("a.head-info_time_6sFQg").first();
+                String weiboUrl = timeElement.attr("href").trim();
+                if (seenWeiboUrlSet.contains(weiboUrl)) {
+                    continue;
+                }
+                seenWeiboUrlSet.add(weiboUrl);
+                String time = timeElement.text().trim();
+                display.setTime(time);
+                display.setWeiboUrl(weiboUrl);
+                Element contentElement = element.select("div.detail_wbtext_4CRf9").first();
+                String content = extractCleanContent(contentElement, display);
+                display.setContent(content);
+                Element footer = element.selectFirst("footer[aria-label]");
+                if (footer != null) {
+                    String ariaLabel = footer.attr("aria-label").trim();
+                    String[] counts = ariaLabel.split(",");
+                    String repostCnt = counts.length > 0 ? counts[0] : "0";
+                    String commentCnt = counts.length > 1 ? counts[1] : "0";
+                    String likeCnt = counts.length > 2 ? counts[2] : "0";
+                    display.setRepost(repostCnt);
+                    display.setComment(commentCnt);
+                    display.setLike(likeCnt);
+                }
+                res.add(display);
+            }
         }
-        return "登录失败，请核验参数重新登录！";
-    }
-
-    public List<WeiboContentDisplay> homeTimeline(String page) throws IOException {
-        if (page == null || page.isEmpty()) {
-            page = "1";
+        if (!res.isEmpty()) {
+            log.info("搜索结果：" + res.size() + "条");
+            return res;
+        } else {
+            log.warn("搜索结果为空！");
+            return new ArrayList<>();
         }
-        Map<String, String> params = new HashMap<>();
-        params.put("access_token", ACCESS_KEY);
-        params.put("page", page);
-        String res = HttpClientUtil.get(HOME_TIMELINE, params);
-        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
-        List<WeiboContentDisplay> contentDisplay = weiboContent.toContentDisplay();
-        return contentDisplay;
     }
 
 
-    public WeiboContent userTimeline() throws IOException {
-        Map<String, String> params = new HashMap<>();
-        params.put("access_token", ACCESS_KEY);
-        String res = HttpClientUtil.get(USER_TIMELINE, params);
-        System.out.println(res);
-        WeiboContent weiboContent = gson.fromJson(res, WeiboContent.class);
-        return weiboContent;
-    }
 
     public String weiboHot() throws IOException {
         Map<String, String> params = new HashMap<>();
@@ -142,101 +223,58 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return res;
     }
 
-    public void loginAndSetCookies() {
-        if (System.getProperty("webdriver.chrome.driver") == null) {
+    public WebDriver createWebDriver() {
+        if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
             System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
         }
-        ChromeOptions opts = new ChromeOptions();
-
-        ChromeDriver driver = new ChromeDriver(opts);
-
-        driver.get("https://weibo.com/login");
-
-        waitUntilLogin(driver, 180);
-        driver.get("https://weibo.com/");
-        Set<Cookie> cookiesSet = driver.manage().getCookies();
-        cookiesSet.forEach(cookie -> {
-            cookies.put(cookie.getName(), cookie.getValue());
-        });
-    }
-
-    public static void waitUntilLogin(WebDriver driver, int maxWaitSeconds) {
-        log.info("等待人工登录中（自动检测 Cookie 是否登录成功）...");
-        int waited = 0;
-
-        while (waited < maxWaitSeconds) {
-            Set<Cookie> cookies = driver.manage().getCookies();
-            boolean hasSub = cookies.stream().anyMatch(c -> c.getName().equals("SUB"));
-
-            if (hasSub) {
-                log.info("检测到已登录，继续执行程序...");
-                return;
-            }
-
-            try {
-                Thread.sleep(1000); // 每秒检查一次
-                waited++;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-
-        throw new RuntimeException("等待超时，未检测到登录成功");
-    }
-
-//    public static WebDriver createWebDriver() {
-//        if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
-//            System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
-//        }
-//        ChromeOptions options = new ChromeOptions();
+        ChromeOptions options = new ChromeOptions();
 //        options.addArguments("--headless");
-//        WebDriver driver = new ChromeDriver(options);
-//
-//        try {
-//            // 1. 访问微博主页以初始化会话
-//            driver.get("https://s.weibo.com/");
-//            Thread.sleep(1000); // 等待页面加载
-//
-//            // 2. 清除现有的 Cookie
-//            driver.manage().deleteAllCookies();
-//
-//            // 3. 添加登录后的 Cookie
-//            driver.manage().addCookie(new Cookie("SUB", "_2A25K-je6DeRhGeFH4lAW8S7IwzuIHXVmdjVyrDV8PUJbkNANLRfAkW1NehxRTxNZASis35rodcrSQ2Avd-Wk-Cjm"));
-//            driver.manage().addCookie(new Cookie("SUBP", "0033WrSXqPxfM725Ws9jqgMF55529P9D9WhmPkzL2.vnjXUP1bdOLvxu5JpX5KzhUgL.FoM41KzNeK5X1hM2dJLoI0YLxK-LBo.LBoeLxK.L1-BL1K.LxK-L1hnLB.2LxKML12eLB-eLxK-LB.-L1hnLxKML1hnLBo2LxKML12eLB-zt"));
-//            driver.manage().addCookie(new Cookie("ALF", "1747309802"));
-//            driver.manage().addCookie(new Cookie("SCF", "AmttwTI3v9-AcJ1ybNcw5iNFbnGbUEfb6JkHVF3BAScsNhxbeWHm6vcHHwnXxJtvP_LkRTC58PosjlQPRYQizVY."));
-//            driver.manage().addCookie(new Cookie("WBPSESS", "Dt2hbAUaXfkVprjyrAZT_OYadbUPXOkwIMSAWEOPjyySwsWKHWGGQzT1_i92p5zYKaekMXgPMD6Jh26GucqJQWlBD5GrZa0023ISLtzl9JsCqsXK93Ufbp1ZaF73TEaWC1Q2iwthvyAesJH72XBmLtWWG5F9QbBQYnV_atzqYbJ8OZaN8BAClXkjm-GY-Gse_eeTO1Vy0mNEZyWT7wbfow=="));
-//
-//            // 4. 重新访问微博主页以应用 Cookie
-//            driver.get("https://s.weibo.com/");
-//            Thread.sleep(1000); // 等待页面加载
-//
-//            return driver;
-//        } catch (InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//            driver.quit();
-//            throw new RuntimeException("初始化 WebDriver 时发生中断", e);
-//        } catch (Exception e) {
-//            driver.quit();
-//            throw new RuntimeException("初始化 WebDriver 失败", e);
-//        }
-//    }
+        WebDriver webDriver = new ChromeDriver(options);
+
+        try {
+            // 1. 访问微博主页以初始化会话
+            webDriver.get("https://s.weibo.com/");
+            Thread.sleep(1000); // 等待页面加载
+
+            // 2. 清除现有的 Cookie
+            webDriver.manage().deleteAllCookies();
+
+            // 3. 添加登录后的 Cookie
+            webDriver.manage().addCookie(new Cookie("SUB", ""));
+            webDriver.manage().addCookie(new Cookie("SUBP", ""));
+            webDriver.manage().addCookie(new Cookie("ALF", ""));
+            webDriver.manage().addCookie(new Cookie("SCF", "."));
+            webDriver.manage().addCookie(new Cookie("WBPSESS", "=="));
+
+            // 4. 重新访问微博主页以应用 Cookie
+            webDriver.get("https://s.weibo.com/");
+            Thread.sleep(1000); // 等待页面加载
+            driver = webDriver;
+            return webDriver;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            webDriver.quit();
+            throw new RuntimeException("初始化 WebDriver 时发生中断", e);
+        } catch (Exception e) {
+            driver.quit();
+            throw new RuntimeException("初始化 WebDriver 失败", e);
+        }
+    }
 
     public List<WeiboContentDisplay> searchWeibo(String keyword, int page) throws IOException {
-
-
         List<WeiboContentDisplay> res = new ArrayList<>();
         String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
         String searchUrl = SEARCH_WEIBO + encodedKeyword;
-        if (page > 1){
+        if (page > 1) {
             searchUrl = searchUrl + "&page=" + page;
         }
-        if (cookies.isEmpty()) {
+        if (driver == null) {
             log.error("未登录，请您登录！");
             return res;
         }
-        Document doc = Jsoup.connect(searchUrl).cookies(cookies).get();
+        driver.get(searchUrl);
+        String html = driver.getPageSource();
+        Document doc = Jsoup.parse(html);
         Elements elements = doc.select("div.card-wrap");
 
 
@@ -244,7 +282,6 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             try {
                 WeiboContentDisplay display = new WeiboContentDisplay();
                 String mid = post.attr("mid");
-                display.setWeiboId(mid);
                 Element userElement = post.select("a.name").first();
                 if (userElement != null) {
                     String userUrl = userElement.attr("href");
@@ -252,6 +289,8 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                     String username = userElement.text();
                     display.setUserId(userId);
                     display.setUsername(username);
+                    String weiboUrl = MY_FOLLOW_WEIBO + userId + "/" + mid;
+                    display.setWeiboUrl(weiboUrl);
                 }
 
                 Element timeElement = post.select("div.from a").first();
@@ -328,11 +367,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         if (page > 1) {
             searchUrl = searchUrl + "&page=" + page;
         }
-        if (cookies.isEmpty()) {
+        if (driver == null) {
             log.error("未登录，请您登录！");
             return res;
         }
-        Document doc = Jsoup.connect(searchUrl).cookies(cookies).get();
+        driver.get(searchUrl);
+        String html = driver.getPageSource();
+        Document doc = Jsoup.parse(html);
         Element element = doc.select("div.card-wrap").first();
         if (element == null) {
             return new ArrayList<>();
@@ -398,7 +439,12 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             }
         }
         doc.select("i.wbicon, svg, use").remove();
-        return doc.body().wholeText().trim();
+        String content = doc.body().wholeText().trim();
+        if (content.endsWith("收起")) {
+            content = content.substring(0, content.length() - 2);
+        }
+
+        return content;
     }
 
 

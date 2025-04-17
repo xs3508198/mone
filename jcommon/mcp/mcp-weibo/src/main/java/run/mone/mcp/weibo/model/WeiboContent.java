@@ -51,7 +51,7 @@ public class WeiboContent {
         List<WeiboContentDisplay> res = new ArrayList<>();
         statuses.forEach(status -> {
             WeiboContentDisplay weiboContentDisplay = new WeiboContentDisplay();
-            weiboContentDisplay.setWeiboId(status.getIdstr());
+            weiboContentDisplay.setWeiboUrl(status.getIdstr());
             weiboContentDisplay.setUsername(status.getUser().getName());
             weiboContentDisplay.setUserId(status.getUser().getId());
             weiboContentDisplay.setContent(status.getText());

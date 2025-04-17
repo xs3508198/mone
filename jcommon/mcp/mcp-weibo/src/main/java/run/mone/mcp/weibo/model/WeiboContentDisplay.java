@@ -24,7 +24,7 @@ public class WeiboContentDisplay {
 
     private String like;
 
-    private String weiboId;
+    private String weiboUrl;
 
     private String userId;
 }
