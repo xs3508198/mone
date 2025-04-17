@@ -45,14 +45,21 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return null;
     }
 
+    private static WebDriver searchDriver;
 
-    private static String ACCESS_KEY = "" ;
-    private static final String ALAPI_TOKEN  = "";
+    public static synchronized void initDriver() {
+        if (searchDriver == null) {
+            searchDriver = createWebDriver();
+
+        }
+    }
 
 
+    private static String ACCESS_KEY = "2.009t_itFOmpXdB7ef68576b70JvGR_";
+    private static final String ALAPI_TOKEN = "kz9rbidzldo4ukzxwbexrgguzndqh4";
 
     private static final String CLIENT_ID = "1500473794";
-    private static final String CLIENT_SECRET = "";
+    private static final String CLIENT_SECRET = "1e8d2ba34025a53aa78ca9b9286419cf";
     private static final String AUTHORIZATION_URL = "https://api.weibo.com/oauth2/authorize";
     private static final String TOKEN_URL = "https://api.weibo.com/oauth2/access_token";
     public static final String REDIRECT_URI = "https://api.weibo.com/oauth2/default.html";
@@ -178,7 +185,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
     }
 
-    public List<WeiboContentDisplay> searchWeibo(String keyword){
+    public List<WeiboContentDisplay> searchWeibo(String keyword) {
 
         WebDriver driver = createWebDriver();
 
@@ -212,7 +219,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                     String content = "";
                     if (contentElements.size() > 1) {
                         for (Element contentElement : contentElements) {
-                            if (contentElement.attr("node-type").equals("feed_list_content_full")){
+                            if (contentElement.attr("node-type").equals("feed_list_content_full")) {
                                 //地点包含在内容里，单独提取
                                 content = extractCleanContent(contentElement, display);
                             }
@@ -226,7 +233,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                     Elements actionItems = post.select("div.card-act li");
                     for (Element li : actionItems) {
                         String actionType = li.select("a").attr("action-type");
-                        if (actionType.contains("feed_list_forward")){
+                        if (actionType.contains("feed_list_forward")) {
                             //转发
                             String repostCnt = li.text().trim();
                             if (repostCnt.equals("转发")) {
@@ -234,7 +241,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                             }
                             display.setRepost(repostCnt);
                         }
-                        if (actionType.contains("feed_list_comment")){
+                        if (actionType.contains("feed_list_comment")) {
                             //评论
                             String commentCnt = li.text().trim();
                             if (commentCnt.equals("评论")) {
@@ -242,7 +249,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                             }
                             display.setComment(commentCnt);
                         }
-                        if (actionType.contains("feed_list_like")){
+                        if (actionType.contains("feed_list_like")) {
                             //点赞
                             Element likeElement = li.select("span.woo-like-count").first();
                             String likeCnt = (likeElement != null) ? likeElement.text().trim() : "";
@@ -258,10 +265,11 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
             }
 
-            if (res.size() > 0) {
-                log.info("搜索结果（JSON 格式）：");
+            if (!res.isEmpty()) {
+                log.info("搜索结果：" + res.size() + "条");
                 return res;
             } else {
+                log.warn("搜索结果为空！");
                 return new ArrayList<>();
             }
         } finally {
@@ -270,19 +278,22 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    public List<WeiboUserDisplay> searchUsers(String userKeyword){
+    public List<WeiboUserDisplay> searchUsers(String userKeyword, int page) {
         WebDriver driver = createWebDriver();
         try {
             List<WeiboUserDisplay> res = new ArrayList<>();
             String encodedKeyword = URLEncoder.encode(userKeyword, StandardCharsets.UTF_8);
-            String searchUrl = "https://s.weibo.com/weibo?q=" + encodedKeyword + "&Refer=weibo_user";
+            String searchUrl = "https://s.weibo.com/user?q=" + encodedKeyword + "&Refer=weibo_user";
+            if (page > 1){
+                searchUrl = searchUrl + "&page=" + page;
+            }
             driver.get(searchUrl);
             Document doc = Jsoup.parse(Objects.requireNonNull(driver.getPageSource()));
             Element element = doc.select("div.card-wrap").first();
             if (element == null) {
                 return new ArrayList<>();
             }
-            Elements userElements = element.select("div.card card-user-b s-brt1 card-user-b-padding");
+            Elements userElements = element.select("div.card.card-user-b.s-brt1.card-user-b-padding");
             for (Element userElement : userElements) {
                 WeiboUserDisplay display = new WeiboUserDisplay();
                 Element info = userElement.select("div.info").first();
@@ -297,18 +308,21 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
                 String username = nameElement.text().trim();
                 display.setUsername(username);
-                Element intro = info.select("p").first();
-                if (intro != null) {
-                    String introduction = intro.text().trim();
+                Elements pElements = info.select("p");
+                if (pElements.size() > 1) {
+                    String introduction = pElements.first().text().trim();
                     display.setIntroduction(introduction);
                 }
-
-                //TODO 
-
-            res.add(display);
-
+                String fansCount = pElements.select("span.s-nobr").first().text().trim().replace("粉丝：", "");
+                display.setFansCount(fansCount);
+                res.add(display);
             }
-
+            if (!res.isEmpty()) {
+                log.info("搜索结果：" + res.size() + "条");
+            }else {
+                log.warn("搜索结果为空！");
+                return new ArrayList<>();
+            }
             return res;
         } finally {
             driver.quit();
@@ -332,11 +346,11 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         String html = element.html().replaceAll("(?i)<br[^>]*>", "\n");
         Document doc = Jsoup.parse(html);
         for (Element a : doc.select("a")) {
-            if (!"_blank".equalsIgnoreCase(a.attr("target"))){
+            if (!"_blank".equalsIgnoreCase(a.attr("target"))) {
                 a.remove();
             }
             String wbicon = a.select("i.wbicon").text().trim();
-            if ("_blank".equalsIgnoreCase(a.attr("target")) && wbicon.equals("2")){
+            if ("_blank".equalsIgnoreCase(a.attr("target")) && wbicon.equals("2")) {
                 display.setPlace(a.text().replaceFirst("2", ""));
                 a.remove();
             }
