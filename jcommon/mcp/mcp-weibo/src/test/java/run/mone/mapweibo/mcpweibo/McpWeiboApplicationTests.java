@@ -11,7 +11,6 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import run.mone.mcp.weibo.function.WeiboFunction;
-import run.mone.mcp.weibo.model.WeiboContent;
 import run.mone.mcp.weibo.model.WeiboContentDisplay;
 import run.mone.mcp.weibo.model.WeiboUserDisplay;
 
@@ -28,7 +27,7 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void test5(){
+    public void test5() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
         Map<String, String> res = weiboFunction.weiboHot();
@@ -37,7 +36,7 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void test6(){
+    public void test6() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
         List<WeiboContentDisplay> users = weiboFunction.searchWeibo("曾凡博", 1);
@@ -46,7 +45,7 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void test7(){
+    public void test7() {
         System.out.println(ExtractUserId("//weibo.com/6616523296?refer_flag=1001030103_"));
     }
 
@@ -66,7 +65,7 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void test8(){
+    public void test8() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
         List<WeiboUserDisplay> users = weiboFunction.searchUsers("曾凡博", 2);
@@ -75,9 +74,9 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void testGetUsers(){
+    public void testGetUsers() {
         String k = "曾凡博";
-        Map<String, String > cookie = new HashMap();
+        Map<String, String> cookie = new HashMap();
         cookie.put("SUB", "");
         cookie.put("SUBP", "");
         cookie.put("ALF", "");
@@ -122,7 +121,7 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void testGetCookie(){
+    public void testGetCookie() {
         String path = "/Users/a1/chromedriver/chromedriver-mac-arm64/chromedriver";
         if (System.getProperty("webdriver.chrome.driver") == null) {
             System.setProperty("webdriver.chrome.driver", path);
@@ -172,21 +171,58 @@ public class McpWeiboApplicationTests {
 
     @Test
     @SneakyThrows
-    public void test9(){
+    public void test9() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.myFollowWeibo(2);
+        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.myFollowWeibo(10);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
     @Test
     @SneakyThrows
-    public void test10(){
+    public void test10() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
         List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.recommendWeibo(2);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
+
+    @Test
+    @SneakyThrows
+    public void test11() {
+        WeiboFunction weiboFunction = new WeiboFunction();
+        weiboFunction.createWebDriver();
+        List<String> list = weiboFunction.weiboDetail("https://weibo.com/2803301701/PnGqfmKc7", "", 3);
+        System.out.println(gson.toJson(list));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testLogin() {
+
+        if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
+            System.setProperty("webdriver.chrome.driver", "/Users/a1/chromedriver/chromedriver-mac-arm64/chromedriver");
+        }
+        ChromeOptions options = new ChromeOptions();
+//        options.addArguments("--headless");
+        WebDriver webDriver = new ChromeDriver(options);
+
+        webDriver.get("https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&url=");
+        Thread.sleep(10000);
+        Set<Cookie> cookies = webDriver.manage().getCookies();
+        for (Cookie cookie : cookies) {
+            System.out.println(gson.toJson(cookie));
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void test12() {
+        WeiboFunction weiboFunction = new WeiboFunction();
+        weiboFunction.createWebDriver();
+        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.localWeibo(0);
+        System.out.println(gson.toJson(weiboContentDisplays));
+    }
 
 }

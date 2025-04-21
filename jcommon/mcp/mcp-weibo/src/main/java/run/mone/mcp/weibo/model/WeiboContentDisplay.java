@@ -27,4 +27,5 @@ public class WeiboContentDisplay {
     private String weiboUrl;
 
     private String userId;
+
 }
