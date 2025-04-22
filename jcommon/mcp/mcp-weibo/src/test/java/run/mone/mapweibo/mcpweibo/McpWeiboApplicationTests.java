@@ -225,4 +225,13 @@ public class McpWeiboApplicationTests {
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
+    @Test
+    @SneakyThrows
+    public void test13() {
+        WeiboFunction weiboFunction = new WeiboFunction();
+        weiboFunction.createWebDriver();
+        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.hereAndNowWeibo(0);
+        System.out.println(gson.toJson(weiboContentDisplays));
+    }
+
 }

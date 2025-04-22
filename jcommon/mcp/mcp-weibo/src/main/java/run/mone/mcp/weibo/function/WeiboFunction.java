@@ -37,6 +37,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     private WebDriver driver;
 
+    private static final String LOGIN_URL = "https://passport.weibo.com/sso/signin?entry=wapsso&source=wapsso&url=";
     private static final String WEIBO_HOT = "https://weibo.com/newlogin?tabtype=search&gid=&openLoginLayer=0&url=https%3A%2F%2Fweibo.com%2Fhot%2Fsearch";
     private static final String SEARCH_WEIBO = "https://s.weibo.com/weibo?q=";
     private static final String SEARCH_USER = "https://s.weibo.com/user?q=";
@@ -58,38 +59,60 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             System.setProperty("webdriver.chrome.driver", "CHROME_DRIVER_PATH");
         }
         ChromeOptions options = new ChromeOptions();
-        WebDriver webDriver = new ChromeDriver(options);
-
-        webDriver.get("https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&url=");
-        Thread.sleep(15000);
-        Set<Cookie> cookies = webDriver.manage().getCookies();
-        if (cookies.isEmpty()) {
-            return "登录失败！请重新登录";
-        }
-        webDriver.get(MY_FOLLOW_WEIBO);
-        String localStorage = (String) ((JavascriptExecutor) webDriver).executeScript("return JSON.stringify(localStorage);");
-        String sessionStorage = (String) ((JavascriptExecutor) webDriver).executeScript("return JSON.stringify(sessionStorage);");
-
-        //options.addArguments("--headless");
         // 自动允许地理位置访问
         HashMap<String, Object> prefs = new HashMap<>();
         prefs.put("profile.default_content_setting_values.geolocation", 1); // 1=允许，2=阻止
         options.setExperimentalOption("prefs", prefs);
+        options.addArguments("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36");
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        WebDriver webDriver = new ChromeDriver(options);
+        ((JavascriptExecutor) webDriver).executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+
+        webDriver.get(LOGIN_URL);
+        WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(30));
+        wait.until(ExpectedConditions.urlContains("https://weibo.com/"));
+
+
+        //options.addArguments("--headless");
+
         WebDriver newWebDriver = new ChromeDriver(options);
-        newWebDriver.get(MY_FOLLOW_WEIBO);
+        ((JavascriptExecutor) newWebDriver).executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+        // 访问 m.weibo.cn，确保生成相关 Cookies
+        webDriver.get(MOBILE_WEIBO);
+        newWebDriver.get(MOBILE_WEIBO);
+        Thread.sleep(800); // 等待页面加载
+
+        Set<Cookie> cookies = webDriver.manage().getCookies();
+        System.out.println(gson.toJson(cookies));
+        if (cookies.isEmpty()) {
+            return "登录失败！请重新登录";
+        }
         for (Cookie cookie : cookies) {
-            Thread.sleep(1000);
+            Thread.sleep(500);
             newWebDriver.manage().addCookie(cookie);
         }
+
+        // 访问 weibo.com，确保生成相关 Cookies
+        webDriver.get(MY_FOLLOW_WEIBO);
+        newWebDriver.get(MY_FOLLOW_WEIBO);
+        String localStorage = (String) ((JavascriptExecutor) webDriver).executeScript("return JSON.stringify(localStorage);");
+        String sessionStorage = (String) ((JavascriptExecutor) webDriver).executeScript("return JSON.stringify(sessionStorage);");
+
+        Set<Cookie> cookies2 = webDriver.manage().getCookies();
+        System.out.println(gson.toJson(cookies2));
+        for (Cookie cookie : cookies2){
+            Thread.sleep(500);
+            newWebDriver.manage().addCookie(cookie);
+        }
+        newWebDriver.get(MY_FOLLOW_WEIBO);
         // 恢复本地存储和会话存储（如果需要）
         ((JavascriptExecutor) newWebDriver).executeScript("localStorage.clear();");
         ((JavascriptExecutor) newWebDriver).executeScript("var data = " + localStorage + "; for(var key in data){localStorage.setItem(key, data[key]);}");
         ((JavascriptExecutor) newWebDriver).executeScript("sessionStorage.clear();");
         ((JavascriptExecutor) newWebDriver).executeScript("var data = " + sessionStorage + "; for(var key in data){sessionStorage.setItem(key, data[key]);}");
-        newWebDriver.get(MY_FOLLOW_WEIBO);
         webDriver.quit();
         driver = newWebDriver;
-        Thread.sleep(1000);
+        Thread.sleep(300);
         return "登录成功！";
     }
 
@@ -541,34 +564,32 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         for (WebElement item : items) {
             if (item.getText().equals("同城")){
                 item.click();
+                Thread.sleep(800);
                 break;
             }
         }
         List<String> htmlList = new ArrayList<>();
         for (int i = 0; i <= scrollTimes; i++) {
-//            ((JavascriptExecutor) driver).executeScript(
-//                    "document.querySelectorAll('div.weibo-text a').forEach(function(el){if (el.textContent.trim === '全文'){el.click();}});"
-//            );
-//            Thread.sleep(1000);
             String scrollHtml = driver.getPageSource();
             htmlList.add(scrollHtml);
             ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
             Thread.sleep(300);
         }
-        //TODO 过滤
-        Set<String> seenWeiboUrlSet = new HashSet<>();
         for (String html : htmlList) {
             Document doc = Jsoup.parse(html);
             Elements elements = doc.select("div.wb-item-wrap");
             for (Element element : elements) {
                 WeiboContentDisplay display = new WeiboContentDisplay();
-                Element userElement = element.select("div.m-text-box").first();
+                Element userElement = element.select("header.weibo-top").first();
+                if (userElement == null) {
+                    continue;
+                }
                 String attr = userElement.select("a").first().attr("href");
                 if (attr.contains("/profile/")) {
                     String userId = attr.replace("/profile/", "");
                     display.setUserId(userId);
                 }
-                String username = userElement.text().trim();
+                String username = userElement.select("h3.m-text-cut").first().text().trim();
                 display.setUsername(username);
                 String time = userElement.select("span.time").first().text().trim();
                 display.setTime(time);
@@ -576,7 +597,8 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 Element textelement = element.select("div.weibo-text").first();
                 Elements iconElements = textelement.select("a");
                 for (Element iconElement : iconElements) {
-                    if (iconElement.attr("href").startsWith("https://weibo.com/p/")){
+                    Element img = iconElement.select("img").first();
+                    if (img != null && img.attr("src") .equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")){
                         String place = iconElement.text().trim();
                         display.setPlace(place);
                     }
@@ -592,17 +614,102 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 display.setRepost(repost);
                 Element commentElement = box.get(1);
                 String comment = commentElement.text().trim();
-                comment = comment.equals("评论") ? "0" : repost;
+                comment = comment.equals("评论") ? "0" : comment;
                 display.setComment(comment);
                 Element likeElement = box.getLast();
                 String like = likeElement.text().trim();
-                like = like.equals("赞") ? "0" : repost;
+                like = like.equals("赞") ? "0" : like;
                 display.setLike(like);
-                res.add(display);
+                if (!res.contains(display)) {
+                    res.add(display);
+                }
             }
         }
         return res;
 
+
+    }
+
+    public List<WeiboContentDisplay> hereAndNowWeibo(int scrollTimes) throws Exception {
+        List<WeiboContentDisplay> res = new ArrayList<>();
+        driver.get(MOBILE_WEIBO);
+        Thread.sleep(500);
+        System.out.println(gson.toJson(driver.manage().getCookies()));
+        List<WebElement> items = driver.findElements(By.cssSelector("li.item_li"));
+        List<WebElement> cur_items = driver.findElements(By.cssSelector("li.cur"));
+        items.addAll(cur_items);
+        for (WebElement item : items) {
+            if (item.getText().equals("同城")){
+                item.click();
+                Thread.sleep(800);
+                break;
+            }
+        }
+        List<WebElement> items2 = driver.findElements(By.cssSelector("div.card19-mode"));
+        for (WebElement item : items2) {
+            if (item.findElement(By.cssSelector("h4.m-text-cut")).getText().equals("附近")){
+                item.findElement(By.cssSelector("div.m-box-center-a")).click();
+                Thread.sleep(500);
+            }
+        }
+        WebElement localElement = driver.findElement(By.cssSelector("ul.center"));
+        localElement.findElements(By.cssSelector("li")).get(0).click();
+        Thread.sleep(500);
+        List<String> htmlList = new ArrayList<>();
+        for (int i = 0; i <= scrollTimes; i++) {
+            String scrollHtml = driver.getPageSource();
+            htmlList.add(scrollHtml);
+            ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
+            Thread.sleep(300);
+        }
+        for (String html : htmlList) {
+            Document doc = Jsoup.parse(html);
+            Elements elements = doc.select("div.card-main");
+            for (Element element : elements) {
+                WeiboContentDisplay display = new WeiboContentDisplay();
+                Element userElement = element.select("header.m-avatar-box").first();
+                if (userElement == null) {
+                    continue;
+                }
+                String username = userElement.select("h3.m-text-cut").first().text().trim();
+                display.setUsername(username);
+                String time = userElement.select("span.time").first().text().trim();
+                display.setTime(time);
+
+                Element textelement = element.select("div.weibo-text").first();
+                String textHtml = textelement.html().replaceAll("(?i)<br[^>]*>", "\n");
+                Document textDoc = Jsoup.parse(textHtml);
+                Elements iconElements = textDoc.select("a");
+                for (Element iconElement : iconElements) {
+                    Element img = iconElement.select("img").first();
+                    if (img != null && img.attr("src") .equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")){
+                        String place = iconElement.text().trim();
+                        display.setPlace(place);
+                    }
+                    iconElement.remove();
+                }
+                String content = textDoc.text().trim();
+                display.setContent(content);
+
+                Elements box = element.select("div.m-box-center-a");
+                Element repostElement = box.getFirst();
+                String repost = repostElement.text().trim();
+                repost = repost.equals("转发") ? "0" : repost;
+                display.setRepost(repost);
+                Element commentElement = box.get(1);
+                String comment = commentElement.text().trim();
+                comment = comment.equals("评论") ? "0" : comment;
+                display.setComment(comment);
+                Element likeElement = box.getLast();
+                String like = likeElement.text().trim();
+                like = like.equals("赞") ? "0" : like;
+                display.setLike(like);
+                if (!res.contains(display)) {
+                    res.add(display);
+                }
+            }
+        }
+        return res;
 
     }
 
