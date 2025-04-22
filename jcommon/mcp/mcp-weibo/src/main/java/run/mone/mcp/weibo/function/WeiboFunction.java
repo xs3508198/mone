@@ -1,5 +1,6 @@
 package run.mone.mcp.weibo.function;
 
+import com.google.common.collect.ImmutableMap;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -60,23 +61,14 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
         ChromeOptions options = new ChromeOptions();
         // 自动允许地理位置访问
-        HashMap<String, Object> prefs = new HashMap<>();
-        prefs.put("profile.default_content_setting_values.geolocation", 1); // 1=允许，2=阻止
-        options.setExperimentalOption("prefs", prefs);
-        options.addArguments("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36");
-        options.addArguments("--disable-blink-features=AutomationControlled");
+
         WebDriver webDriver = new ChromeDriver(options);
-        ((JavascriptExecutor) webDriver).executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
 
         webDriver.get(LOGIN_URL);
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(30));
         wait.until(ExpectedConditions.urlContains("https://weibo.com/"));
 
-
-        //options.addArguments("--headless");
-
         WebDriver newWebDriver = new ChromeDriver(options);
-        ((JavascriptExecutor) newWebDriver).executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
         // 访问 m.weibo.cn，确保生成相关 Cookies
         webDriver.get(MOBILE_WEIBO);
         newWebDriver.get(MOBILE_WEIBO);
@@ -632,8 +624,10 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     public List<WeiboContentDisplay> hereAndNowWeibo(int scrollTimes) throws Exception {
         List<WeiboContentDisplay> res = new ArrayList<>();
+
         driver.get(MOBILE_WEIBO);
         Thread.sleep(500);
+
         System.out.println(gson.toJson(driver.manage().getCookies()));
         List<WebElement> items = driver.findElements(By.cssSelector("li.item_li"));
         List<WebElement> cur_items = driver.findElements(By.cssSelector("li.cur"));
