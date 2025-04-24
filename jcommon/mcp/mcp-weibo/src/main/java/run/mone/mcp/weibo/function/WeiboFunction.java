@@ -2,6 +2,8 @@ package run.mone.mcp.weibo.function;
 
 import com.google.common.collect.ImmutableMap;
 import jakarta.annotation.PreDestroy;
+import lombok.Data;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -28,12 +30,89 @@ import java.util.regex.Pattern;
 
 import static run.mone.hive.common.JsonUtils.gson;
 
+@Data
 @Slf4j
 public class WeiboFunction implements Function<Map<String, Object>, McpSchema.CallToolResult> {
 
+    private String name = "weiboOperation";
+
+    private String desc = "Weibo operations mainly include logging in, Posting on Weibo, viewing the user's homepage, my followed Weibo, recommended Weibo, Weibo hot search, searching for Weibo, viewing the details of retweets, comments and likes of a certain Weibo, searching for users, local Weibo, nearby Weibo and logging out of Weibo";
+
+    private String toolScheme = """
+            {
+               "type": "object",
+               "properties": {
+                 "operation": {
+                   "type": "string",
+                   "enum": ["login", "newWeibo", "userHome", "myFollowedWeibo", "recommendWeibo", "weiboHot", "searchWeibo", "weiboDetail", "searchUsers", "localWeibo", "nearbyWeibo", "logout"],
+                   "description": "Weibo operation type and requirements: login/logout/weiboHot require no parameters; newWeibo requires myContent; userHome requires userId & scrollTimes; myFollowedWeibo/recommendWeibo/localWeibo/nearbyWeibo require scrollTimes; searchWeibo requires keyword & page; weiboDetail requires weiboUrl (myContent & detailType optional); searchUsers requires keyword & scrollTimes. Finally, you need to format the returned data, perform automatic line breaks, etc., to make it display more aesthetically pleasing"
+                 },
+                 "myContent": {
+                   "type": "string",
+                   "description": "Weibo text content (only used for newWeibo posting/weiboDetail commenting, ignored in other operations)."
+                 },
+                 "userId": {
+                   "type": "string",
+                   "description": "Target user's unique ID (required for userHome operation)."
+                 },
+                 "scrollTimes": {
+                   "type": "integer",
+                   "description": "Page scroll loading count (default: 5, used in userHome/myFollowedWeibo/recommendWeibo/searchUsers/localWeibo/nearbyWeibo)."
+                 },
+                 "keyword": {
+                   "type": "string",
+                   "description": "Search term (required for searchWeibo/searchUsers operations)."
+                 },
+                 "page": {
+                   "type": "integer",
+                   "description": "Search results page number (default: 1, required for searchWeibo operation)."
+                 },
+                 "weiboUrl": {
+                   "type": "string",
+                   "description": "Weibo detail page URL (required for weiboDetail operation)."
+                 },
+                 "detailType": {
+                   "type": "integer",
+                   "description": "Interaction type for weiboDetail: 1=reposts, 2=comments (default), 3=likes."
+                 }
+               },
+               "required": ["operation", "myContent", "userId", "scrollTimes", "keyword", "page", "weiboUrl", "detailType"]
+             }
+            """;
+
+    @SneakyThrows
     @Override
-    public McpSchema.CallToolResult apply(Map<String, Object> stringObjectMap) {
-        return null;
+    public McpSchema.CallToolResult apply(Map<String, Object> args) {
+        String operation = (String) args.get("operation");
+        String myContent = (String) args.get("myContent");
+        String userId = (String) args.get("userId");
+        Integer scrollTimes = (Integer) args.get("scrollTimes");
+        String keyword = (String) args.get("keyword");
+        Integer page = (Integer) args.get("page");
+        String weiboUrl = (String) args.get("weiboUrl");
+        Integer detailType = (Integer) args.get("detailType");
+
+        try{
+            String res = switch (operation){
+                case "login" -> createWebDriver();
+                case "newWeibo" -> newWeibo(myContent);
+                case "userHome" -> userHomepage(userId, scrollTimes);
+                case "myFollowedWeibo" -> myFollowWeibo(scrollTimes);
+                case "recommendWeibo" -> recommendWeibo(scrollTimes);
+                case "weiboHot" -> weiboHot();
+                case "searchWeibo" -> searchWeibo(keyword, page);
+                case "weiboDetail" -> weiboDetail(weiboUrl, myContent, detailType);
+                case "searchUsers" -> searchUsers(keyword, page);
+                case "localWeibo" -> localWeibo(scrollTimes);
+                case "nearbyWeibo" -> hereAndNowWeibo(scrollTimes);
+                case "logout" -> logout();
+                default -> "no this operation";
+            };
+            return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(res)), false);
+        } catch (IOException e) {
+            log.error("Error performing Elasticsearch operation: ", e);
+            return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("Error: " + e.getMessage())), true);
+        }
     }
 
     private WebDriver driver;
@@ -44,10 +123,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     private static final String SEARCH_USER = "https://s.weibo.com/user?q=";
     private static final String MY_FOLLOW_WEIBO = "https://weibo.com/";
     private static final String RECOMMEND_WEIBO = "https://weibo.com/hot/weibo/102803";
-    private static final String MOBILE_WEIBO  = "https://m.weibo.cn/";
+    private static final String MOBILE_WEIBO = "https://m.weibo.cn/";
+    private static final String HERE_NOW_WEIBO = "https://m.weibo.cn/p/index?containerid=2310360020_fujin_%s_%s_0_m_&needlocation=1&luicode=20000174";
+    private static final String USER_HOMEPAGE = "https://weibo.com/u/%s";
 
+    private static final String CHROME_DRIVER_PATH = System.getenv().getOrDefault("CHROME_DRIVER_PATH", "/Users/a1/chromedriver/chromedriver-mac-arm64/chromedriver");
+    private static final int LOADING_TIME = Integer.parseInt(System.getenv().getOrDefault("LOADING_TIME", "300"));
 
-    private static final String CHROME_DRIVER_PATH = "/Users/a1/chromedriver/chromedriver-mac-arm64/chromedriver";
 
     static {
         // 在静态块中设置，确保只设置一次
@@ -57,22 +139,30 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     public String createWebDriver() throws InterruptedException {
         if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
-            System.setProperty("webdriver.chrome.driver", "CHROME_DRIVER_PATH");
+            System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
         }
         ChromeOptions options = new ChromeOptions();
-        // 自动允许地理位置访问
-
         WebDriver webDriver = new ChromeDriver(options);
 
         webDriver.get(LOGIN_URL);
-        WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(30));
-        wait.until(ExpectedConditions.urlContains("https://weibo.com/"));
+        WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(90));
+        try {
+            wait.until(ExpectedConditions.urlContains(MY_FOLLOW_WEIBO));
+        } catch (TimeoutException e) {
+            webDriver.quit();
+            return "登录失败，请重试！";
+        }
 
+        Map<String, Object> prefs = new HashMap<>();
+        // 0 = 默认弹窗，1 = 允许，2 = 阻止
+        prefs.put("profile.default_content_setting_values.geolocation", 1);
+        options.setExperimentalOption("prefs", prefs);
+        options.addArguments("--headless=new");
         WebDriver newWebDriver = new ChromeDriver(options);
         // 访问 m.weibo.cn，确保生成相关 Cookies
         webDriver.get(MOBILE_WEIBO);
         newWebDriver.get(MOBILE_WEIBO);
-        Thread.sleep(800); // 等待页面加载
+        waitLoading();// 等待页面加载
 
         Set<Cookie> cookies = webDriver.manage().getCookies();
         System.out.println(gson.toJson(cookies));
@@ -80,7 +170,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             return "登录失败！请重新登录";
         }
         for (Cookie cookie : cookies) {
-            Thread.sleep(500);
+            waitLoading();
             newWebDriver.manage().addCookie(cookie);
         }
 
@@ -92,8 +182,8 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
         Set<Cookie> cookies2 = webDriver.manage().getCookies();
         System.out.println(gson.toJson(cookies2));
-        for (Cookie cookie : cookies2){
-            Thread.sleep(500);
+        for (Cookie cookie : cookies2) {
+            waitLoading();
             newWebDriver.manage().addCookie(cookie);
         }
         newWebDriver.get(MY_FOLLOW_WEIBO);
@@ -104,40 +194,107 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         ((JavascriptExecutor) newWebDriver).executeScript("var data = " + sessionStorage + "; for(var key in data){sessionStorage.setItem(key, data[key]);}");
         webDriver.quit();
         driver = newWebDriver;
-        Thread.sleep(300);
+        waitLoading();
         return "登录成功！";
     }
 
-    public List<WeiboContentDisplay> myFollowWeibo(int scrollTimes) throws Exception {
+    public String newWeibo(String myContent) throws Exception {
+        WeiboContentDisplay display = new WeiboContentDisplay();
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return new ArrayList<>();
+            return "未登录，请您登录！";
+        }
+        driver.get(MY_FOLLOW_WEIBO);
+        waitLoading();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        WebElement textarea2 = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("textarea.Form_input_2gtXx")));
+        textarea2.click();
+        textarea2.sendKeys(myContent);
+
+        WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button.Tool_btn_2Eane")));
+        submitButton.click();
+
+        waitLoading();
+        String html = driver.getPageSource();
+        Document doc = Jsoup.parse(html);
+        Element element = doc.select("div.wbpro-scroller-item").first();
+        ((JavascriptExecutor) driver).executeScript(
+                "document.querySelectorAll('span.expand').forEach(function(el){el.click();});"
+        );
+        Element contentElement = element.select("div.detail_wbtext_4CRf9").first();
+        String content = extractCleanContent(contentElement, display);
+        display.setContent(content);
+        Element userElement = element.select("div.head_content_wrap_27749").first();
+        Element usernameElement = userElement.select("a.head_name_24eEB").first();
+        String username = usernameElement.text().trim();
+        String userId = usernameElement.attr("usercard");
+        display.setUsername(username);
+        display.setUserId(userId);
+        Element timeElement = element.select("a.head-info_time_6sFQg").first();
+        String time = timeElement.attr("title");
+        String weiboUrl = timeElement.attr("href");
+        display.setTime(time);
+        display.setWeiboUrl(weiboUrl);
+        Element footer = element.select("footer[aria-label]").first();
+        if (footer != null) {
+            String ariaLabel = footer.attr("aria-label").trim();
+            String[] counts = ariaLabel.split(",");
+            String repostCnt = counts.length > 0 ? counts[0] : "0";
+            String commentCnt = counts.length > 1 ? counts[1] : "0";
+            String likeCnt = counts.length > 2 ? counts[2] : "0";
+            display.setRepost(repostCnt);
+            display.setComment(commentCnt);
+            display.setLike(likeCnt);
+        }
+        return gson.toJson(display);
+    }
+
+    public String userHomepage(String userId, int scrollTimes) throws Exception{
+        if (driver == null) {
+            log.error("未登录，请您登录！");
+            return "未登录，请您登录！";
+        }
+        String fullUrl = String.format(USER_HOMEPAGE,userId);
+        List<WeiboContentDisplay> res = processMsg(driver, fullUrl, scrollTimes);
+        if (!res.isEmpty()) {
+            log.info("搜索结果：" + res.size() + "条");
+            return gson.toJson(res);
+        } else {
+            log.warn("搜索结果为空！");
+            return "";
+        }
+    }
+
+    public String myFollowWeibo(int scrollTimes) throws Exception {
+        if (driver == null) {
+            log.error("未登录，请您登录！");
+            return "未登录，请您登录！";
         }
         List<WeiboContentDisplay> res = processMsg(driver, MY_FOLLOW_WEIBO, scrollTimes);
         if (!res.isEmpty()) {
             log.info("搜索结果：" + res.size() + "条");
-            return res;
+            return gson.toJson(res);
         } else {
             log.warn("搜索结果为空！");
-            return new ArrayList<>();
+            return "";
         }
     }
 
     private List<WeiboContentDisplay> processMsg(WebDriver webDriver, String url, int scrollTimes) throws Exception {
         List<WeiboContentDisplay> res = new ArrayList<>();
         webDriver.get(url);
-        Thread.sleep(500);
+        waitLoading();
 
         List<String> htmlList = new ArrayList<>();
         for (int i = 0; i < scrollTimes; i++) {
             ((JavascriptExecutor) webDriver).executeScript(
                     "document.querySelectorAll('span.expand').forEach(function(el){el.click();});"
             );
-            Thread.sleep(1000);
+            waitLoading();
             String scrollHtml = webDriver.getPageSource();
             htmlList.add(scrollHtml);
             ((JavascriptExecutor) webDriver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
-            Thread.sleep(1000);
+            waitLoading();
         }
         Set<String> seenWeiboUrlSet = new HashSet<>();
         for (String html : htmlList) {
@@ -156,7 +313,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                     continue;
                 }
                 seenWeiboUrlSet.add(weiboUrl);
-                String time = timeElement.text().trim();
+                String time = timeElement.attr("title");
                 display.setTime(time);
                 display.setWeiboUrl(weiboUrl);
                 Element contentElement = element.select("div.detail_wbtext_4CRf9").first();
@@ -179,24 +336,24 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return res;
     }
 
-    public List<WeiboContentDisplay> recommendWeibo(int scrollTimes) throws Exception {
+    public String recommendWeibo(int scrollTimes) throws Exception {
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return new ArrayList<>();
+            return "未登录，请您登录！";
         }
         List<WeiboContentDisplay> res = processMsg(driver, RECOMMEND_WEIBO, scrollTimes);
         ;
         if (!res.isEmpty()) {
             log.info("搜索结果：" + res.size() + "条");
-            return res;
+            return gson.toJson(res);
         } else {
             log.warn("搜索结果为空！");
-            return new ArrayList<>();
+            return "";
         }
     }
 
 
-    public Map<String, String> weiboHot() throws Exception {
+    public String weiboHot() throws Exception {
         Map<String, String> res = new TreeMap<>(new Comparator<String>() {
 
             @Override
@@ -206,10 +363,10 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         });
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return res;
+            return "未登录，请您登录！";
         }
         driver.get(WEIBO_HOT);
-        Thread.sleep(1500);
+        waitLoading();
         int i = 0; //最多就刷10次
         while (i++ < 10) {
             String html = driver.getPageSource();
@@ -228,12 +385,12 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 break;
             }
             ((JavascriptExecutor) driver).executeScript("window.scrollBy(0, window.innerHeight);");
-            Thread.sleep(100);
+            waitLoading();
         }
-        return res;
+        return gson.toJson(res);
     }
 
-    public List<WeiboContentDisplay> searchWeibo(String keyword, int page) throws IOException {
+    public String searchWeibo(String keyword, int page) {
         List<WeiboContentDisplay> res = new ArrayList<>();
         String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
         String searchUrl = SEARCH_WEIBO + encodedKeyword;
@@ -242,7 +399,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return res;
+            return "未登录，请您登录！";
         }
         driver.get(searchUrl);
         String html = driver.getPageSource();
@@ -321,38 +478,38 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
         if (!res.isEmpty()) {
             log.info("搜索结果：" + res.size() + "条");
-            return res;
+            return gson.toJson(res);
         } else {
             log.warn("搜索结果为空！");
-            return new ArrayList<>();
+            return "";
         }
 
     }
 
     //1：转发， 2：评论，3：点赞
-    public List<String> weiboDetail(String weiboUrl, String content, int type) throws Exception {
+    public String weiboDetail(String weiboUrl, String myContent, int detailType) throws Exception {
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return new ArrayList<>();
+            return "未登录，请您登录！";
         }
         List<String> res = new ArrayList<>();
         driver.get(weiboUrl);
-        Thread.sleep(1000);
-        switch (type) {
+        waitLoading();
+        switch (detailType) {
             case 1:
-                res = processRepostDetail(driver, content);
+                res = processRepostDetail(driver, myContent);
                 break;
             case 2:
-                res = processCommentDetail(driver, content);
+                res = processCommentDetail(driver, myContent);
                 break;
             case 3:
-                res = processLikeDetail(driver, content);
+                res = processLikeDetail(driver, myContent);
                 break;
             default:
-                res = processCommentDetail(driver, content);
+                res = processCommentDetail(driver, myContent);
                 break;
         }
-        return res;
+        return gson.toJson(res);
     }
 
     private List<String> processCommentDetail(WebDriver webDriver, String myContent) throws Exception {
@@ -365,14 +522,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button.Composer_btn_2XFOD")));
             submitButton.click();
             wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("div.wbpro-scroller-item")));
-            Thread.sleep(1000);
+            waitLoading();
         }
 
         List<String> res = new ArrayList<>();
         int i = 0;
         while (i++ < 30) {
             wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.cssSelector("div.vue-recycle-scroller__item-view")));
-
             List<WebElement> elements = webDriver.findElements(By.cssSelector("div.vue-recycle-scroller__item-view"));
             log.info("第" + i + "次：" + elements.size());
             for (WebElement element : elements) {
@@ -389,7 +545,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
             }
             ((JavascriptExecutor) webDriver).executeScript("window.scrollBy(0, window.innerHeight * 0.5);");
-            Thread.sleep(300);
+            waitLoading();
             if (res.size() >= 100) {
                 break;
             }
@@ -403,7 +559,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(5));
         WebElement textarea = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("div.toolbar_wrap_np6Ug")));
         textarea.click();
-        Thread.sleep(200);
+        waitLoading();
         String html = webDriver.getPageSource();
         Document doc = Jsoup.parse(html);
         if (doc.select("div.toolbar_cur_JoD5A").isEmpty()) {
@@ -418,7 +574,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button.Composer_btn_2XFOD")));
             submitButton.click();
             wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("div.wbpro-scroller-item")));
-            Thread.sleep(1000);
+            waitLoading();
         }
         int i = 0;
         while (i++ < 30) {
@@ -436,13 +592,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                         .getText().trim();
                 String time = element.findElement(
                         By.cssSelector("a.ALink_none_1w6rm")).getText().trim();
-                String disPlay = time +  "【" + username + "】: " + content ;
+                String disPlay = time + "【" + username + "】: " + content;
                 if (!res.contains(disPlay)) {
                     res.add(disPlay);
                 }
             }
             ((JavascriptExecutor) webDriver).executeScript("window.scrollBy(0, window.innerHeight * 0.5);");
-            Thread.sleep(300);
+            waitLoading();
             if (res.size() >= 100) {
                 break;
             }
@@ -457,7 +613,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(5));
         WebElement likeElement = webDriver.findElements(By.cssSelector("div.toolbar_wrap_np6Ug")).getLast();
         likeElement.click();
-        Thread.sleep(300);
+        waitLoading();
 
         if (!myContent.isEmpty()) {
             likeElement.click();
@@ -485,7 +641,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
             }
             ((JavascriptExecutor) webDriver).executeScript("window.scrollBy(0, window.innerHeight * 0.5);");
-            Thread.sleep(300);
+            waitLoading();
             if (res.size() >= 100) {
                 break;
             }
@@ -494,7 +650,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    public List<WeiboUserDisplay> searchUsers(String userKeyword, int page) {
+    public String searchUsers(String userKeyword, int page) {
 
         List<WeiboUserDisplay> res = new ArrayList<>();
         String encodedKeyword = URLEncoder.encode(userKeyword, StandardCharsets.UTF_8);
@@ -504,14 +660,14 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
         if (driver == null) {
             log.error("未登录，请您登录！");
-            return res;
+            return "未登录，请您登录！";
         }
         driver.get(searchUrl);
         String html = driver.getPageSource();
         Document doc = Jsoup.parse(html);
         Element element = doc.select("div.card-wrap").first();
         if (element == null) {
-            return new ArrayList<>();
+            return "";
         }
         Elements userElements = element.select("div.card.card-user-b.s-brt1.card-user-b-padding");
         for (Element userElement : userElements) {
@@ -541,22 +697,26 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             log.info("搜索结果：" + res.size() + "条");
         } else {
             log.warn("搜索结果为空！");
-            return new ArrayList<>();
+            return "";
         }
-        return res;
+        return gson.toJson(res);
 
     }
 
-    public List<WeiboContentDisplay> localWeibo(int scrollTimes) throws Exception {
+    public String localWeibo(int scrollTimes) throws Exception {
         List<WeiboContentDisplay> res = new ArrayList<>();
+        if (driver == null) {
+            log.error("未登录，请您登录！");
+            return "未登录，请您登录！";
+        }
         driver.get(MOBILE_WEIBO);
         List<WebElement> items = driver.findElements(By.cssSelector("li.item_li"));
         List<WebElement> cur_items = driver.findElements(By.cssSelector("li.cur"));
         items.addAll(cur_items);
         for (WebElement item : items) {
-            if (item.getText().equals("同城")){
+            if (item.getText().equals("同城")) {
                 item.click();
-                Thread.sleep(800);
+                waitLoading();
                 break;
             }
         }
@@ -565,7 +725,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
             String scrollHtml = driver.getPageSource();
             htmlList.add(scrollHtml);
             ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
-            Thread.sleep(300);
+            waitLoading();
         }
         for (String html : htmlList) {
             Document doc = Jsoup.parse(html);
@@ -590,7 +750,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 Elements iconElements = textelement.select("a");
                 for (Element iconElement : iconElements) {
                     Element img = iconElement.select("img").first();
-                    if (img != null && img.attr("src") .equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")){
+                    if (img != null && img.attr("src").equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")) {
                         String place = iconElement.text().trim();
                         display.setPlace(place);
                     }
@@ -617,44 +777,54 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
             }
         }
-        return res;
-
+        return gson.toJson(res);
 
     }
 
-    public List<WeiboContentDisplay> hereAndNowWeibo(int scrollTimes) throws Exception {
+    public String hereAndNowWeibo(int scrollTimes) throws Exception {
         List<WeiboContentDisplay> res = new ArrayList<>();
-
+        if (driver == null) {
+            log.error("未登录，请您登录！");
+            return "未登录，请您登录！";
+        }
         driver.get(MOBILE_WEIBO);
-        Thread.sleep(500);
+        waitLoading();
+        // 执行 JS，获取真实经纬度
+        Map<String, Object> position = (Map<String, Object>) ((JavascriptExecutor) driver)
+                .executeScript(
+                        "return new Promise((resolve, reject) => {" +
+                                "  navigator.geolocation.getCurrentPosition(" +
+                                "    p => resolve({" +
+                                "      latitude: p.coords.latitude," +
+                                "      longitude: p.coords.longitude," +
+                                "      accuracy: p.coords.accuracy" +
+                                "    })," +
+                                "    e => reject(e)," +
+                                "    {" +
+                                "      enableHighAccuracy: true," +
+                                "      timeout: 10000," +
+                                "      maximumAge: 0" +
+                                "    }" +
+                                "  );" +
+                                "});"
+                );
+        double lon = (Double) position.get("longitude");
+        double lat = (Double) position.get("latitude");
+        double accuracy = (Double) position.get("accuracy");
+        log.info("实时定位 → 经度：{}，纬度：{}，精度：{} 米", lon, lat, accuracy);
 
-        System.out.println(gson.toJson(driver.manage().getCookies()));
-        List<WebElement> items = driver.findElements(By.cssSelector("li.item_li"));
-        List<WebElement> cur_items = driver.findElements(By.cssSelector("li.cur"));
-        items.addAll(cur_items);
-        for (WebElement item : items) {
-            if (item.getText().equals("同城")){
-                item.click();
-                Thread.sleep(800);
-                break;
-            }
-        }
-        List<WebElement> items2 = driver.findElements(By.cssSelector("div.card19-mode"));
-        for (WebElement item : items2) {
-            if (item.findElement(By.cssSelector("h4.m-text-cut")).getText().equals("附近")){
-                item.findElement(By.cssSelector("div.m-box-center-a")).click();
-                Thread.sleep(500);
-            }
-        }
+        String fullUrl = String.format(HERE_NOW_WEIBO, lon, lat);
+        driver.get(fullUrl);
+        waitLoading();
         WebElement localElement = driver.findElement(By.cssSelector("ul.center"));
         localElement.findElements(By.cssSelector("li")).get(0).click();
-        Thread.sleep(500);
+        waitLoading();
         List<String> htmlList = new ArrayList<>();
         for (int i = 0; i <= scrollTimes; i++) {
             String scrollHtml = driver.getPageSource();
             htmlList.add(scrollHtml);
             ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
-            Thread.sleep(300);
+            waitLoading();
         }
         for (String html : htmlList) {
             Document doc = Jsoup.parse(html);
@@ -676,7 +846,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 Elements iconElements = textDoc.select("a");
                 for (Element iconElement : iconElements) {
                     Element img = iconElement.select("img").first();
-                    if (img != null && img.attr("src") .equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")){
+                    if (img != null && img.attr("src").equals("https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_location_default.png")) {
                         String place = iconElement.text().trim();
                         display.setPlace(place);
                     }
@@ -703,7 +873,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 }
             }
         }
-        return res;
+        return gson.toJson(res);
 
     }
 
@@ -721,7 +891,9 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
     private String extractCleanContent(Element element, WeiboContentDisplay display) {
+        //换行
         String html = element.html().replaceAll("(?i)<br[^>]*>", "\n");
+        //
         Document doc = Jsoup.parse(html);
         for (Element a : doc.select("a")) {
             if (!"_blank".equalsIgnoreCase(a.attr("target"))) {
@@ -735,6 +907,13 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
         doc.select("i.wbicon, svg, use").remove();
         String content = doc.body().wholeText().trim();
+        // —— 新增：去除零宽空格（U+200B） ——
+        content = content.replaceAll("\\u200B", "");  // 针对 ZWSP 的专用清理
+
+        // —— 新增：去除所有控制字符（含 C0/C1 及格式字符等） ——
+        content = content.replaceAll("\\p{C}", "");
+        content = content.trim();
+
         if (content.endsWith("收起")) {
             content = content.substring(0, content.length() - 2);
         }
@@ -742,14 +921,19 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return content;
     }
 
-    public void logout(){
+    public void waitLoading() throws InterruptedException {
+        Thread.sleep(LOADING_TIME);
+    }
+
+    public String logout() {
         if (driver != null) {
             driver.quit();
         }
+        return "退出成功！";
     }
 
     @PreDestroy
-    public void destroy(){
+    public void destroy() {
         logout();
     }
 

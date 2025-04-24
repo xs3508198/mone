@@ -11,7 +11,6 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import run.mone.mcp.weibo.function.WeiboFunction;
-import run.mone.mcp.weibo.model.WeiboContentDisplay;
 import run.mone.mcp.weibo.model.WeiboUserDisplay;
 
 import java.net.URLEncoder;
@@ -30,7 +29,7 @@ public class McpWeiboApplicationTests {
     public void test5() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        Map<String, String> res = weiboFunction.weiboHot();
+        String res = weiboFunction.weiboHot();
         System.out.println(gson.toJson(res));
     }
 
@@ -38,8 +37,8 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test6() {
         WeiboFunction weiboFunction = new WeiboFunction();
-        weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> users = weiboFunction.searchWeibo("曾凡博", 1);
+//        weiboFunction.createWebDriver();
+        String users = weiboFunction.searchWeibo("特朗普 关税", 1);
         System.out.println(gson.toJson(users));
     }
 
@@ -68,7 +67,7 @@ public class McpWeiboApplicationTests {
     public void test8() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<WeiboUserDisplay> users = weiboFunction.searchUsers("曾凡博", 2);
+        String users = weiboFunction.searchUsers("曾凡博", 2);
         System.out.println(gson.toJson(users));
     }
 
@@ -174,7 +173,7 @@ public class McpWeiboApplicationTests {
     public void test9() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.myFollowWeibo(10);
+        String weiboContentDisplays = weiboFunction.myFollowWeibo(10);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
@@ -183,7 +182,7 @@ public class McpWeiboApplicationTests {
     public void test10() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.recommendWeibo(2);
+        String weiboContentDisplays = weiboFunction.recommendWeibo(2);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
@@ -193,7 +192,7 @@ public class McpWeiboApplicationTests {
     public void test11() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<String> list = weiboFunction.weiboDetail("https://weibo.com/2803301701/PnGqfmKc7", "", 3);
+        String list = weiboFunction.weiboDetail("https://weibo.com/2803301701/PnGqfmKc7", "", 3);
         System.out.println(gson.toJson(list));
     }
 
@@ -221,7 +220,7 @@ public class McpWeiboApplicationTests {
     public void test12() {
         WeiboFunction weiboFunction = new WeiboFunction();
         weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.localWeibo(0);
+        String weiboContentDisplays = weiboFunction.localWeibo(0);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 
@@ -229,8 +228,29 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test13() {
         WeiboFunction weiboFunction = new WeiboFunction();
-        weiboFunction.createWebDriver();
-        List<WeiboContentDisplay> weiboContentDisplays = weiboFunction.hereAndNowWeibo(0);
+        String login = weiboFunction.createWebDriver();
+        System.out.println(login);
+        String weiboContentDisplays = weiboFunction.hereAndNowWeibo(0);
+        System.out.println(gson.toJson(weiboContentDisplays));
+    }
+
+    @Test
+    @SneakyThrows
+    public void test14() {
+        WeiboFunction weiboFunction = new WeiboFunction();
+        String login = weiboFunction.createWebDriver();
+        System.out.println(login);
+        String weiboContentDisplay = weiboFunction.newWeibo("hello world！");
+        System.out.println(gson.toJson(weiboContentDisplay));
+    }
+
+    @Test
+    @SneakyThrows
+    public void test15() {
+        WeiboFunction weiboFunction = new WeiboFunction();
+        String login = weiboFunction.createWebDriver();
+        System.out.println(login);
+        String weiboContentDisplays = weiboFunction.userHomepage("7992710487", 2);
         System.out.println(gson.toJson(weiboContentDisplays));
     }
 

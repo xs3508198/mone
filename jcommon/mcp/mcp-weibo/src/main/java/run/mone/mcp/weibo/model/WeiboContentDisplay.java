@@ -16,9 +16,9 @@ public class WeiboContentDisplay {
 
     private List<String> pictureUrl;
 
-    private String comment;
-
     private String place;
+
+    private String comment;
 
     private String repost;
 
