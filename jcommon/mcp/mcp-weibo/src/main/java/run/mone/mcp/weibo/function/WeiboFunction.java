@@ -80,7 +80,6 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
              }
             """;
 
-    @SneakyThrows
     @Override
     public McpSchema.CallToolResult apply(Map<String, Object> args) {
         String operation = (String) args.get("operation");
@@ -109,7 +108,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
                 default -> "no this operation";
             };
             return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(res)), false);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Error performing Elasticsearch operation: ", e);
             return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("Error: " + e.getMessage())), true);
         }
@@ -137,7 +136,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    public String createWebDriver() throws InterruptedException {
+    public String createWebDriver(){
         if (System.getProperty("webdriver.chrome.driver") == null || System.getProperty("webdriver.chrome.driver").isEmpty()) {
             System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
         }
@@ -198,7 +197,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return "登录成功！";
     }
 
-    public String newWeibo(String myContent) throws Exception {
+    public String newWeibo(String myContent) {
         WeiboContentDisplay display = new WeiboContentDisplay();
         if (driver == null) {
             log.error("未登录，请您登录！");
@@ -249,7 +248,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return gson.toJson(display);
     }
 
-    public String userHomepage(String userId, int scrollTimes) throws Exception{
+    public String userHomepage(String userId, int scrollTimes){
         if (driver == null) {
             log.error("未登录，请您登录！");
             return "未登录，请您登录！";
@@ -265,7 +264,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
     }
 
-    public String myFollowWeibo(int scrollTimes) throws Exception {
+    public String myFollowWeibo(int scrollTimes) {
         if (driver == null) {
             log.error("未登录，请您登录！");
             return "未登录，请您登录！";
@@ -280,7 +279,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         }
     }
 
-    private List<WeiboContentDisplay> processMsg(WebDriver webDriver, String url, int scrollTimes) throws Exception {
+    private List<WeiboContentDisplay> processMsg(WebDriver webDriver, String url, int scrollTimes){
         List<WeiboContentDisplay> res = new ArrayList<>();
         webDriver.get(url);
         waitLoading();
@@ -336,7 +335,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return res;
     }
 
-    public String recommendWeibo(int scrollTimes) throws Exception {
+    public String recommendWeibo(int scrollTimes){
         if (driver == null) {
             log.error("未登录，请您登录！");
             return "未登录，请您登录！";
@@ -353,7 +352,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    public String weiboHot() throws Exception {
+    public String weiboHot(){
         Map<String, String> res = new TreeMap<>(new Comparator<String>() {
 
             @Override
@@ -487,7 +486,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
     //1：转发， 2：评论，3：点赞
-    public String weiboDetail(String weiboUrl, String myContent, int detailType) throws Exception {
+    public String weiboDetail(String weiboUrl, String myContent, int detailType) {
         if (driver == null) {
             log.error("未登录，请您登录！");
             return "未登录，请您登录！";
@@ -512,7 +511,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
         return gson.toJson(res);
     }
 
-    private List<String> processCommentDetail(WebDriver webDriver, String myContent) throws Exception {
+    private List<String> processCommentDetail(WebDriver webDriver, String myContent) {
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(5));
         if (!myContent.isEmpty()) {
             WebElement textarea = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("textarea.Form_input_3JT2Q")));
@@ -554,7 +553,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    private List<String> processRepostDetail(WebDriver webDriver, String myContent) throws Exception {
+    private List<String> processRepostDetail(WebDriver webDriver, String myContent) {
         List<String> res = new ArrayList<>();
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(5));
         WebElement textarea = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("div.toolbar_wrap_np6Ug")));
@@ -608,7 +607,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
     }
 
 
-    private List<String> processLikeDetail(WebDriver webDriver, String myContent) throws Exception {
+    private List<String> processLikeDetail(WebDriver webDriver, String myContent) {
         List<String> res = new ArrayList<>();
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(5));
         WebElement likeElement = webDriver.findElements(By.cssSelector("div.toolbar_wrap_np6Ug")).getLast();
@@ -703,7 +702,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     }
 
-    public String localWeibo(int scrollTimes) throws Exception {
+    public String localWeibo(int scrollTimes) {
         List<WeiboContentDisplay> res = new ArrayList<>();
         if (driver == null) {
             log.error("未登录，请您登录！");
@@ -781,7 +780,7 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
     }
 
-    public String hereAndNowWeibo(int scrollTimes) throws Exception {
+    public String hereAndNowWeibo(int scrollTimes) {
         List<WeiboContentDisplay> res = new ArrayList<>();
         if (driver == null) {
             log.error("未登录，请您登录！");
@@ -920,9 +919,12 @@ public class WeiboFunction implements Function<Map<String, Object>, McpSchema.Ca
 
         return content;
     }
-
-    public void waitLoading() throws InterruptedException {
-        Thread.sleep(LOADING_TIME);
+    public void waitLoading(){
+        try {
+            Thread.sleep(LOADING_TIME);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Loading interrupted", e);
+        }
     }
 
     public String logout() {
