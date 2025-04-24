@@ -58,7 +58,6 @@
         <module>mcp-store-data</module>
         <module>mcp-knowledge-base</module>
         <module>mcp-chat</module>
-        <module>mcp-x_twitter</module>
         <module>mcp-weibo</module>
     </modules>
 

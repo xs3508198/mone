@@ -37,7 +37,7 @@ public class McpWeiboApplicationTests {
     @SneakyThrows
     public void test6() {
         WeiboFunction weiboFunction = new WeiboFunction();
-//        weiboFunction.createWebDriver();
+        weiboFunction.createWebDriver();
         String users = weiboFunction.searchWeibo("特朗普 关税", 1);
         System.out.println(gson.toJson(users));
     }
