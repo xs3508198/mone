@@ -65,6 +65,7 @@
         <module>mcp-image</module>
         <module>mcp-remote-file</module>
         <module>mcp-miapi-cursor</module>
+        <module>mcp-laborunion</module>
     </modules>
 
     <properties>
