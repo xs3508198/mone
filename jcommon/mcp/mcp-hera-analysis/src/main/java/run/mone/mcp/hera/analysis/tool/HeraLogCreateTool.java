@@ -40,12 +40,14 @@ public class HeraLogCreateTool implements ITool {
 
                 **返回信息：**
                 - 创建出来的Hera日志的tailId，该tail在公共MCP-Space空间下的公共MCP-store下
-            
+
                 **重要提示：**
                 - projectId为miline项目ID（数字），必填
                 - pipelineId为环境（流水线）ID，有时也称envId（数字），必填
                 - tailName为日志尾部名称，选填
                 - logPath为容器中的日志存储路径，选填
+                - spaceId为空间ID（数字），选填
+                - storeId为存储ID（数字），选填
                 如果提取不到tailName或者logPath，就设为空字符串
                 """;
     }
@@ -57,6 +59,8 @@ public class HeraLogCreateTool implements ITool {
                 - pipelineId: (必填) miline中的项目的流水线id，有时也称envId，数字类型
                 - tailName: (可选) 创建的Hera日志的tail的名称，字符串类型
                 - logPath: (可选) 被采集的miline容器中的日志路径， 字符串类型
+                - spaceId: (可选) 空间ID，数字类型
+                - storeId: (可选) 存储ID，数字类型
                 """;
     }
 
@@ -76,6 +80,8 @@ public class HeraLogCreateTool implements ITool {
                 <pipelineId>miline项目中流水线ID（envId）</pipelineId>
                 <tailName>日志tail名称（可选）</tailName>
                 <logPath>日志路径（可选）</logPath>
+                <spaceId>空间ID（可选）</spaceId>
+                <storeId>存储ID（可选）</storeId>
                 %s
                 </hera_log_create>
                 """.formatted(taskProgress);
@@ -130,10 +136,15 @@ public class HeraLogCreateTool implements ITool {
             String tailName = inputJson.has("tailName") &&  !StringUtils.isBlank(inputJson.get("tailName").getAsString()) ? inputJson.get("tailName").getAsString() : "";
             String logPath = inputJson.has("logPath") &&  !StringUtils.isBlank(inputJson.get("logPath").getAsString()) ? inputJson.get("logPath").getAsString() : "";
 
-            log.info("开始创建日志，miline项目id: {}, 流水线id: {}, tail名称: {}， 日志路径: {}", projectId, pipelineId, tailName, logPath);
+            // 获取可选的 spaceId 和 storeId
+            Long spaceId = inputJson.has("spaceId") ? inputJson.get("spaceId").getAsLong() : null;
+            Long storeId = inputJson.has("storeId") ? inputJson.get("storeId").getAsLong() : null;
+
+            log.info("开始创建日志，miline项目id: {}, 流水线id: {}, tail名称: {}， 日志路径: {}, spaceId: {}, storeId: {}",
+                    projectId, pipelineId, tailName, logPath, spaceId, storeId);
 
             // 创建日志
-            String logResult = heraLogService.createLogByMiline(projectId, pipelineId, tailName, logPath, userName, userName);
+            String logResult = heraLogService.createLogByMiline(projectId, pipelineId, tailName, logPath, userName, userName, spaceId, storeId);
 
             // 设置成功响应
             result.addProperty("result", logResult);
@@ -141,9 +152,15 @@ public class HeraLogCreateTool implements ITool {
             result.addProperty("pipelineId", pipelineId);
             result.addProperty("tailName", tailName);
             result.addProperty("logPath", logPath);
+            if (spaceId != null) {
+                result.addProperty("spaceId", spaceId);
+            }
+            if (storeId != null) {
+                result.addProperty("storeId", storeId);
+            }
             result.addProperty("success", true);
 
-            log.info("成功创建Hera日志，projectId: {}, pipelineId: {}", projectId, pipelineId);
+            log.info("成功创建Hera日志，projectId: {}, pipelineId: {}, spaceId: {}, storeId: {}", projectId, pipelineId, spaceId, storeId);
 
             return result;
 

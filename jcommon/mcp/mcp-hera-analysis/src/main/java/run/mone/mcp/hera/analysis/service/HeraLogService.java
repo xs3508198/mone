@@ -26,7 +26,7 @@ public class HeraLogService {
 
     private final Gson gson = new Gson();
 
-    public String createLogByMiline(Long projectId, Long envId, String tailName, String logPath, String userName, String userId) {
+    public String createLogByMiline(Long projectId, Long envId, String tailName, String logPath, String userName, String userId, Long spaceId, Long storeId) {
         try {
             // 构建请求体
             JsonArray requestArray = new JsonArray();
@@ -51,6 +51,15 @@ public class HeraLogService {
                 requestBody.addProperty("userId", userId);
             }
 
+            // 添加新的可选字段
+            if (spaceId != null) {
+                requestBody.addProperty("spaceId", spaceId);
+            }
+
+            if (storeId != null) {
+                requestBody.addProperty("storeId", storeId);
+            }
+
             requestArray.add(requestBody);
 
             String requestJson = gson.toJson(requestArray);
@@ -64,8 +73,8 @@ public class HeraLogService {
             return responseBody;
 
         } catch (Exception e) {
-            log.error("创建Hera日志失败，projectId: {}, envId: {}",
-                    projectId, envId);
+            log.error("创建Hera日志失败，projectId: {}, envId: {}, spaceId: {}, storeId: {}",
+                    projectId, envId, spaceId, storeId);
             return "创建日志失败：" + e.getMessage();
         }
     }
